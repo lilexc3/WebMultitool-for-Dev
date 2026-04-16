@@ -1,0 +1,20 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'telegram'
+
+receivers:
+  - name: 'telegram'
+    telegram_configs:
+      - send_resolved: true
+        bot_token: '8685529304:AAF6vrIFxijSgQN_oJYSx3jOeqnNWkQ6wSw'
+        chat_id: -5149919915
+        parse_mode: 'HTML'
+        message: |
+          {{ if eq .Status "firing" }}🔥 <b>АЛЕРТ</b>{{ else }}✅ <b>ОТБОЙ</b>{{ end }}
+          {{ .CommonAnnotations.summary }}

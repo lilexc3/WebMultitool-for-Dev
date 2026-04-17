@@ -1,5 +1,6 @@
 import React from "react";
 import LogInBanner from "./log-in-banner";
+import "./start-banner.css";
 
 const StartBanner = () => {
   return (

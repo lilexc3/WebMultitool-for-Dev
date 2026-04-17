@@ -1,5 +1,6 @@
 import React from "react";
 import { useState } from "react";
+import "./step2.css";
 
 export default function CopyField({ value }) {
   const [copied, setCopied] = useState(false);
@@ -9,6 +10,11 @@ export default function CopyField({ value }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  value =
+    "docker run -d \
+--name devops-agent \
+-e AGENT_TOKEN=...";
 
   return (
     <div className="copy-field">

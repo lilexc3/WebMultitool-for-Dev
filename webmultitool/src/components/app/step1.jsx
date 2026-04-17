@@ -1,10 +1,15 @@
 import React from "react";
+import "./step1.css";
 
 const Step1 = () => {
   return (
     <div>
       <h3>Step 1: Enter your domain</h3>
-      <input type="text" placeholder="Enter your domain" />
+      <input
+        className="input"
+        type="text"
+        placeholder="https:// your-domain.com"
+      />
     </div>
   );
 };

@@ -1,0 +1,103 @@
+.log-in-banner {
+  position: absolute;
+  top: 50%;
+  right: 60px;
+  transform: translateY(-50%);
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 32px 28px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.log-in-banner::before {
+  content: "Continue with GitHub";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.log-in-banner::after {
+  content: "OR";
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: #909090;
+  margin: 4px 0;
+}
+
+.log-in-button {
+  width: 100%;
+  padding: 12px 16px;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.log-in-button::before {
+  content: "Sign in with Email";
+}
+
+.log-in-button {
+  font-size: 0;
+}
+
+.log-in-button::before {
+  font-size: 14px;
+}
+
+.log-in-button:hover {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.sign-up-button {
+  width: 100%;
+  padding: 12px 16px;
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sign-up-button:hover {
+  background-color: #ebebeb;
+  border-color: #d0d0d0;
+}
+
+@media (max-width: 900px) {
+  .log-in-banner {
+    position: relative;
+    top: auto;
+    right: auto;
+    transform: none;
+    margin-top: 24px;
+    width: 100%;
+    max-width: 320px;
+  }
+}

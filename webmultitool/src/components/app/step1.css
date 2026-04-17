@@ -1,0 +1,61 @@
+/* Step1.css - Domain input step styles */
+
+.step1-container {
+  background-color: #111111;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.step1-title {
+  font-size: 15px;
+  font-weight: 400;
+  color: #ffffff;
+  margin-bottom: 20px;
+}
+
+.step1-title span {
+  font-weight: 600;
+}
+
+.step1-title::before {
+  content: "Step 1: ";
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.domain-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background-color: #0a0a0a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.input:before {
+  content: "";
+  width: 4px;
+  background-color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  padding: 14px 16px;
+  background-color: transparent;
+  border: none;
+  font-size: 14px;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+  color: #808080;
+  outline: none;
+}
+
+.input::placeholder {
+  color: #606060;
+}
+
+.input:focus {
+  color: #ffffff;
+}

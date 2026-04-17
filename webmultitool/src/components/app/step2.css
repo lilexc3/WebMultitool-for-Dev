@@ -1,0 +1,129 @@
+/* Step2.css - Copy command step styles */
+
+.step2-container {
+  background-color: #111111;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step2-title {
+  font-size: 15px;
+  font-weight: 400;
+  color: #ffffff;
+  margin: 0;
+}
+
+.step2-title::before {
+  content: "Step 2: ";
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* Code block with copy button */
+.copy-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #1a1a1a;
+  border: 1px solid #333333;
+  border-radius: 8px;
+  padding: 16px 20px;
+  padding-right: 100px;
+}
+
+.copy-field__text {
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+  font-size: 13px;
+  color: #909090;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copy-field button,
+.copy-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 20px;
+  background-color: #2a2a2a;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copy-field button:hover,
+.copy-btn:hover {
+  background-color: #3a3a3a;
+  border-color: #505050;
+}
+
+.copy-field button:active,
+.copy-btn:active {
+  transform: translateY(-50%) scale(0.97);
+}
+
+/* Check Connection Button */
+.check-connection-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background-color: #1c2a35;
+  border: 1px solid #2a4a5a;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.check-connection-btn::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background-color: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.check-connection-btn:hover {
+  background-color: #243640;
+  border-color: #3a5a6a;
+}
+
+@media (max-width: 600px) {
+  .copy-field {
+    flex-direction: column;
+    padding: 16px;
+    padding-bottom: 60px;
+    align-items: flex-start;
+  }
+
+  .copy-field__text {
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .copy-field button,
+  .copy-btn {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    top: auto;
+    transform: none;
+  }
+}

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import "./App.css";
-import StartBanner from "./components/start-banner";
-import Step1 from "./components/step1";
-import Step2 from "./components/step2";
+import "./app.css";
+import StartBanner from "./components/app/start-banner";
+import Step1 from "./components/app/step1";
+import Step2 from "./components/app/step2";
 
 function App() {
   return (
@@ -10,8 +10,10 @@ function App() {
       <div className="Start-New-Page">
         <StartBanner />
         <h3 className="onboarding-title">onboarding</h3>
-        <Step1 />
-        <Step2 />
+        <div className="onboarding-steps">
+          <Step1 />
+          <Step2 />
+        </div>
       </div>
     </>
   );

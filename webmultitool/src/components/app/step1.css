@@ -1,61 +1,59 @@
-/* Step1.css - Domain input step styles */
-
-.step1-container {
-  background-color: #111111;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 24px;
-}
-
-.step1-title {
-  font-size: 15px;
-  font-weight: 400;
-  color: #ffffff;
-  margin-bottom: 20px;
-}
-
-.step1-title span {
-  font-weight: 600;
-}
-
-.step1-title::before {
-  content: "Step 1: ";
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.domain-input-wrapper {
+.step1-field {
   position: relative;
   display: flex;
-  align-items: stretch;
-  background-color: #0a0a0a;
-  border: 1px solid #2a2a2a;
+  align-items: center;
+  background-color: #111111;
+  border: 1px solid #252525;
   border-radius: 8px;
-  overflow: hidden;
+  padding: 14px 16px;
+  min-height: 64px;
+  gap: 16px;
 }
 
-.input:before {
-  content: "";
-  width: 4px;
-  background-color: #f59e0b;
+.step1-field h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
   flex-shrink: 0;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .input {
   flex: 1;
-  padding: 14px 16px;
-  background-color: transparent;
-  border: none;
-  font-size: 14px;
+  padding: 10px 14px;
+  background-color: #0e0e0e;
+  border: 1px solid #252525;
+  border-radius: 7px;
+  font-size: 13px;
   font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
-  color: #808080;
+  color: #909090;
   outline: none;
+  box-shadow: inset 3px 0 0 0 #00c896;
+  min-width: 0;
 }
 
 .input::placeholder {
-  color: #606060;
+  color: #505050;
 }
 
 .input:focus {
-  color: #ffffff;
+  color: #e0e0e0;
+  border-color: #333333;
+}
+
+@media (max-width: 600px) {
+  .step1-field {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .step1-field h3 {
+    white-space: normal;
+  }
+
+  .input {
+    width: 100%;
+  }
 }

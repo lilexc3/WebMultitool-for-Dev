@@ -12,24 +12,25 @@ body {
     "Segoe UI",
     Roboto,
     sans-serif;
-  background-color: #0a0a0a;
+  background-color: #111111;
   color: #ffffff;
   min-height: 100vh;
 }
 
 .Start-New-Page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0d1117 0%, #0a0a0a 100%);
+  background-color: #111111;
   padding-bottom: 60px;
 }
 
+/* "Project Onboarding" heading */
 .onboarding-title {
   font-size: 14px;
-  font-weight: 500;
-  color: #a0a0a0;
+  font-weight: 400;
+  color: #909090;
   text-transform: capitalize;
-  padding: 24px 40px 16px;
-  border-top: 1px solid #1f1f1f;
+  padding: 20px 40px 14px;
+  border-top: 1px solid #1e1e1e;
   margin-top: 0;
 }
 
@@ -42,7 +43,7 @@ body {
 .onboarding-steps {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 20px;
   padding: 0 40px;
   max-width: 1200px;
 }
@@ -50,10 +51,10 @@ body {
 @media (max-width: 900px) {
   .onboarding-steps {
     grid-template-columns: 1fr;
-    padding: 0 20px;
+    padding: 0 16px;
   }
 
   .onboarding-title {
-    padding: 24px 20px 16px;
+    padding: 20px 16px 14px;
   }
 }

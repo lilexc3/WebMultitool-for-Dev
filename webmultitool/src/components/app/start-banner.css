@@ -1,33 +1,50 @@
 .Start-Banner {
   position: relative;
-  min-height: 320px;
-  padding: 48px 40px 32px;
-  background: linear-gradient(135deg, #0d1117 0%, #101820 50%, #0d1a1a 100%);
+  min-height: 240px;
+  padding: 40px 40px 28px;
+  background: linear-gradient(135deg, #0d1117 0%, #0f1a1a 60%, #0a1515 100%);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
+  margin: 16px;
+  border-radius: 10px;
 }
 
-/* Background 3D cubes decoration */
+/* Glowing teal 3D cubes area on the right */
 .Start-Banner::before {
   content: "";
   position: absolute;
   top: 0;
   right: 0;
-  width: 60%;
+  width: 55%;
   height: 100%;
   background:
     radial-gradient(
-      ellipse at 70% 50%,
-      rgba(0, 200, 180, 0.1) 0%,
-      transparent 50%
+      ellipse at 65% 45%,
+      rgba(0, 220, 180, 0.12) 0%,
+      transparent 55%
     ),
     radial-gradient(
-      ellipse at 80% 60%,
-      rgba(0, 150, 150, 0.08) 0%,
+      ellipse at 80% 65%,
+      rgba(0, 160, 140, 0.07) 0%,
       transparent 40%
     );
+  pointer-events: none;
+}
+
+/* Grid/line overlay on right side */
+.Start-Banner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 55%;
+  height: 100%;
+  background-image:
+    linear-gradient(rgba(0, 200, 170, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 170, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
   pointer-events: none;
 }
 
@@ -35,43 +52,46 @@
   display: none;
 }
 
+/* "Deploy, Monitor, Rollback." */
 .Start-Banner h1.welcome-text:nth-of-type(2) {
   display: block;
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
   color: #ffffff;
-  margin-bottom: 8px;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-
-.slogan-text {
-  font-size: 28px;
-  font-weight: 400;
-  color: #d0d0d0;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
   letter-spacing: -0.3px;
+  line-height: 1.25;
 }
 
+/* "All From One Dashboard" */
+.slogan-text {
+  font-size: 22px;
+  font-weight: 400;
+  color: #cccccc;
+  margin-bottom: 14px;
+  letter-spacing: -0.2px;
+}
+
+/* "Manage Your Applications with Ease" */
 .about-text {
-  font-size: 14px;
-  color: #707070;
-  margin-bottom: 24px;
-  max-width: 320px;
+  font-size: 13px;
+  color: #606060;
+  margin-bottom: 0;
+  max-width: 300px;
   line-height: 1.5;
 }
 
 .Start-Banner ul {
   display: flex;
-  gap: 24px;
+  gap: 20px;
   list-style: none;
   margin-top: auto;
-  padding-top: 24px;
+  padding-top: 32px;
 }
 
 .Start-Banner ul li {
   font-size: 13px;
-  color: #808080;
+  color: #707070;
   cursor: pointer;
   transition: color 0.2s ease;
 }
@@ -82,19 +102,16 @@
 
 @media (max-width: 768px) {
   .Start-Banner {
-    padding: 32px 20px 24px;
-    min-height: 280px;
+    margin: 8px;
+    padding: 28px 20px 20px;
+    min-height: 220px;
   }
 
   .Start-Banner h1.welcome-text:nth-of-type(2) {
-    font-size: 24px;
-  }
-
-  .slogan-text {
     font-size: 20px;
   }
 
-  .Start-Banner ul {
-    gap: 16px;
+  .slogan-text {
+    font-size: 18px;
   }
 }

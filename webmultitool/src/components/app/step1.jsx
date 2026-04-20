@@ -3,7 +3,7 @@ import "./step1.css";
 
 const Step1 = () => {
   return (
-    <div>
+    <div className="step1-field">
       <h3>Step 1: Enter your domain</h3>
       <input
         className="input"

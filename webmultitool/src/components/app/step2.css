@@ -1,25 +1,23 @@
-/* Step2.css - Copy command step styles */
-
 .step2-container {
-  background-color: #111111;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 24px;
+  background-color: #161616;
+  border: 1px solid #252525;
+  border-radius: 10px;
+  padding: 20px 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .step2-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 400;
-  color: #ffffff;
+  color: #c0c0c0;
   margin: 0;
 }
 
 .step2-title::before {
   content: "Step 2: ";
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
 }
 
@@ -28,19 +26,20 @@
   position: relative;
   display: flex;
   align-items: center;
-  background-color: #1a1a1a;
-  border: 1px solid #333333;
+  background-color: #111111;
+  border: 1px solid #252525;
   border-radius: 8px;
-  padding: 16px 20px;
-  padding-right: 100px;
+  padding: 14px 16px;
+  padding-right: 90px;
+  min-height: 64px;
 }
 
 .copy-field__text {
   font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
-  font-size: 13px;
+  font-size: 12px;
   color: #909090;
-  line-height: 1.5;
-  white-space: nowrap;
+  line-height: 1.6;
+  white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -48,24 +47,27 @@
 .copy-field button,
 .copy-btn {
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  padding: 8px 20px;
-  background-color: #2a2a2a;
-  border: 1px solid #404040;
+  padding: 7px 18px;
+  background-color: #252525;
+  border: 1px solid #363636;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: #ffffff;
+  color: #e0e0e0;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+  white-space: nowrap;
 }
 
 .copy-field button:hover,
 .copy-btn:hover {
-  background-color: #3a3a3a;
-  border-color: #505050;
+  background-color: #303030;
+  border-color: #444444;
 }
 
 .copy-field button:active,
@@ -76,40 +78,44 @@
 /* Check Connection Button */
 .check-connection-btn {
   width: 100%;
-  padding: 14px 24px;
-  background-color: #1c2a35;
-  border: 1px solid #2a4a5a;
+  padding: 13px 24px;
+  background-color: #161e26;
+  border: 1px solid #243040;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #ffffff;
+  color: #e0e0e0;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
 }
 
+/* Green dot indicator */
 .check-connection-btn::after {
   content: "";
   width: 8px;
   height: 8px;
-  background-color: #10b981;
+  background-color: #00d97e;
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 7px rgba(0, 217, 126, 0.6);
+  flex-shrink: 0;
 }
 
 .check-connection-btn:hover {
-  background-color: #243640;
-  border-color: #3a5a6a;
+  background-color: #1c2a36;
+  border-color: #2e4055;
 }
 
 @media (max-width: 600px) {
   .copy-field {
     flex-direction: column;
-    padding: 16px;
-    padding-bottom: 60px;
+    padding: 14px;
+    padding-bottom: 56px;
     align-items: flex-start;
   }
 
@@ -121,8 +127,8 @@
   .copy-field button,
   .copy-btn {
     position: absolute;
-    right: 12px;
-    bottom: 12px;
+    right: 10px;
+    bottom: 10px;
     top: auto;
     transform: none;
   }

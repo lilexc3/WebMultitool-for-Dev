@@ -9,7 +9,7 @@ import sqlite3
 GITLAB_URL = os.getenv('GITLAB_URL', 'http://192.168.0.107:8929')
 GITLAB_TOKEN = os.getenv('GITLAB_TOKEN', '')
 GITLAB_PROJECT_ID = os.getenv('GITLAB_PROJECT_ID', '2')
-DB_PATH = os.getenv('DB_PATH', '/app/data/sites.db')
+DB_PATH = os.getenv('DB_PATH', './data/sites.db')
 
 def trigger_deploy(site_id: int) -> dict:
     """Запуск деплоя через GitLab API"""
@@ -58,18 +58,25 @@ def trigger_rollback(site_id: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 def get_site_info(site_id: int) -> dict:
-    """Получение информации о сайте из БД"""
+    """Получить информацию о сайте по ID"""
+    import sqlite3
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT id, url, name, active FROM sites WHERE id = ?', (site_id,))
+    cursor.execute('''
+        SELECT id, user_id, url, name, active, git_repo_url, agent_token 
+        FROM sites WHERE id = ?
+    ''', (site_id,))
     site = cursor.fetchone()
     conn.close()
     
     if site:
         return {
             "id": site[0],
-            "url": site[1],
-            "name": site[2],
-            "active": bool(site[3])
+            "user_id": site[1],
+            "url": site[2],
+            "name": site[3],
+            "active": bool(site[4]),
+            "git_repo_url": site[5],
+            "agent_token": site[6]
         }
     return None

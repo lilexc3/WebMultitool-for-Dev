@@ -1,5 +1,5 @@
 # backend/app/main.py
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -11,6 +11,7 @@ import logging
 import requests
 import secrets
 import json
+import re
 
 # Добавляем путь к core
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -105,6 +106,20 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ============== Вспомогательные функции ==============
+
+def validate_url(url: str) -> bool:
+    """Проверяет, что URL валидный"""
+    if not url.startswith(('http://', 'https://')):
+        return False
+    pattern = r'^https?://([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:[0-9]+)?(/.*)?$|^https?://(\d{1,3}\.){3}\d{1,3}(:[0-9]+)?(/.*)?$'
+    return re.match(pattern, url) is not None
+
+async def get_current_user(x_user_id: Optional[int] = Header(None)) -> int:
+    """Временная авторизация через заголовок"""
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="X-User-ID header required")
+    return x_user_id
+
 def verify_agent_token(token: str) -> dict:
     """Проверить токен агента и вернуть site_id"""
     conn = sqlite3.connect(DB_PATH)
@@ -126,15 +141,24 @@ def verify_agent_token(token: str) -> dict:
         }
     return None
 
-def get_all_sites_from_db() -> List[dict]:
-    """Получить все сайты из БД"""
+def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
+    """Получить все сайты из БД (если указан user_id — только его)"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT id, user_id, url, name, active, created_at, 
-               last_status, last_check, agent_connected, git_repo_url, agent_token
-        FROM sites ORDER BY created_at DESC
-    ''')
+    
+    if user_id is not None:
+        cursor.execute('''
+            SELECT id, user_id, url, name, active, created_at, 
+                   last_status, last_check, agent_connected, git_repo_url, agent_token
+            FROM sites WHERE user_id = ? ORDER BY created_at DESC
+        ''', (user_id,))
+    else:
+        cursor.execute('''
+            SELECT id, user_id, url, name, active, created_at, 
+                   last_status, last_check, agent_connected, git_repo_url, agent_token
+            FROM sites ORDER BY created_at DESC
+        ''')
+    
     sites = cursor.fetchall()
     conn.close()
     
@@ -175,19 +199,14 @@ def update_prometheus_targets():
             }
         })
     
-    # Путь к файлу из корня проекта
     targets_path = "./monitoring/prometheus/file_sd/targets.json"
-    
-    # Создаём папку если нет
     os.makedirs(os.path.dirname(targets_path), exist_ok=True)
     
-    # Записываем файл
     with open(targets_path, 'w') as f:
         json.dump(targets, f, indent=2)
     
     logger.info(f"Updated Prometheus targets: {len(targets)} sites")
     
-    # Перезагружаем Prometheus
     try:
         requests.post(f"{PROMETHEUS_URL}/-/reload", timeout=5)
         logger.info("Prometheus reloaded")
@@ -204,7 +223,6 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-# --- Статистика сервера ---
 @app.get("/api/server/stats")
 async def server_stats():
     """Получить статистику сервера (CPU, RAM, Disk, Load)"""
@@ -233,14 +251,18 @@ async def check_site(req: SiteCheckRequest):
 # ============== САЙТЫ - CRUD ==============
 
 @app.get("/api/sites")
-async def get_sites():
-    """Получить список всех сайтов"""
-    sites = get_all_sites_from_db()
+async def get_sites(user_id: int = Depends(get_current_user)):
+    """Получить список сайтов текущего пользователя"""
+    sites = get_all_sites_from_db(user_id)
     return {"status": "ok", "data": sites, "count": len(sites)}
 
 @app.post("/api/sites")
-async def create_site(req: SiteCreateRequest):
+async def create_site(req: SiteCreateRequest, user_id: int = Depends(get_current_user)):
     """Создать новый сайт"""
+    # Валидация URL
+    if not validate_url(req.url):
+        raise HTTPException(status_code=400, detail="Invalid URL format. Must start with http:// or https://")
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -250,7 +272,7 @@ async def create_site(req: SiteCreateRequest):
         cursor.execute('''
             INSERT INTO sites (user_id, url, name, git_repo_url, agent_token)
             VALUES (?, ?, ?, ?, ?)
-        ''', (1, req.url, req.name, req.git_repo_url, agent_token))
+        ''', (user_id, req.url, req.name, req.git_repo_url, agent_token))
         conn.commit()
         site_id = cursor.lastrowid
     except sqlite3.IntegrityError:
@@ -258,10 +280,9 @@ async def create_site(req: SiteCreateRequest):
     finally:
         conn.close()
     
-    # Обновляем Prometheus
     update_prometheus_targets()
     
-    agent_command = f"docker run -d --restart always --name devops-agent -e AGENT_TOKEN={agent_token} -e API_URL=ws://your-server:8000/ws/agent -v /var/run/docker.sock:/var/run/docker.sock your-registry/devops-agent:latest"
+    agent_command = f"docker run -d --restart always --name devops-agent -e AGENT_TOKEN={agent_token} -e API_URL=ws://your-server:8000/ws/agent -v /var/run/docker.sock:/var/run/docker.sock lilexc3/webmultitool-agent:latest"
     
     return {
         "status": "ok",
@@ -274,19 +295,30 @@ async def create_site(req: SiteCreateRequest):
 # ============== САЙТЫ - С ПАРАМЕТРОМ ==============
 
 @app.get("/api/sites/{site_id}")
-async def get_site(site_id: int):
+async def get_site(site_id: int, user_id: int = Depends(get_current_user)):
     """Получить информацию о конкретном сайте"""
     site = get_site_info(site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Проверка владельца
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     site["agent_online"] = manager.is_site_online(site_id)
     
     return {"status": "ok", "data": site}
 
 @app.put("/api/sites/{site_id}")
-async def update_site(site_id: int, req: SiteUpdateRequest):
+async def update_site(site_id: int, req: SiteUpdateRequest, user_id: int = Depends(get_current_user)):
     """Обновить информацию о сайте"""
+    site = get_site_info(site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -297,6 +329,8 @@ async def update_site(site_id: int, req: SiteUpdateRequest):
         updates.append("name = ?")
         params.append(req.name)
     if req.url is not None:
+        if not validate_url(req.url):
+            raise HTTPException(status_code=400, detail="Invalid URL format")
         updates.append("url = ?")
         params.append(req.url)
     if req.active is not None:
@@ -311,43 +345,41 @@ async def update_site(site_id: int, req: SiteUpdateRequest):
     
     cursor.execute(query, params)
     conn.commit()
-    
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Site not found")
-    
     conn.close()
     
-    # Обновляем Prometheus
     update_prometheus_targets()
     
     return {"status": "ok", "message": "Site updated"}
 
 @app.delete("/api/sites/{site_id}")
-async def delete_site(site_id: int):
+async def delete_site(site_id: int, user_id: int = Depends(get_current_user)):
     """Удалить сайт"""
+    site = get_site_info(site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('DELETE FROM sites WHERE id = ?', (site_id,))
     conn.commit()
-    
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Site not found")
-    
     conn.close()
     
-    # Обновляем Prometheus
     update_prometheus_targets()
     
     return {"status": "ok", "message": "Site deleted"}
 
 @app.post("/api/sites/{site_id}/check")
-async def check_site_by_id(site_id: int):
+async def check_site_by_id(site_id: int, user_id: int = Depends(get_current_user)):
     """Проверить доступность сайта по ID"""
     site = get_site_info(site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     result = check_site_health(site["url"])
     
@@ -371,21 +403,27 @@ async def check_site_by_id(site_id: int):
     }
 
 @app.post("/api/sites/{site_id}/full-stats")
-async def get_full_stats(site_id: int):
+async def get_full_stats(site_id: int, user_id: int = Depends(get_current_user)):
     """Получить полную статистику сайта (HTTP, Ping, DNS, SSL)"""
     site = get_site_info(site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
     
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     stats = get_site_full_stats(site["url"])
     return {"status": "ok", "data": stats}
 
 @app.post("/api/sites/{site_id}/deploy")
-async def deploy_site(site_id: int):
+async def deploy_site(site_id: int, user_id: int = Depends(get_current_user)):
     """Запустить деплой (через агента или GitLab API)"""
     site = get_site_info(site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if manager.is_site_online(site_id):
         command = {
@@ -408,11 +446,14 @@ async def deploy_site(site_id: int):
         return result
 
 @app.post("/api/sites/{site_id}/rollback")
-async def rollback_site(site_id: int):
+async def rollback_site(site_id: int, user_id: int = Depends(get_current_user)):
     """Запустить откат (через агента или GitLab API)"""
     site = get_site_info(site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if manager.is_site_online(site_id):
         command = {
@@ -432,15 +473,17 @@ async def rollback_site(site_id: int):
         return result
 
 @app.get("/api/sites/{site_id}/metrics")
-async def get_site_metrics(site_id: int):
+async def get_site_metrics(site_id: int, user_id: int = Depends(get_current_user)):
     """Получить метрики сайта из Prometheus"""
     site = get_site_info(site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
     
+    if site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     url = site["url"]
     
-    # Текущий статус
     status_query = f'probe_success{{instance="{url}"}}'
     is_up = False
     
@@ -453,7 +496,6 @@ async def get_site_metrics(site_id: int):
     except Exception as e:
         logger.error(f"Prometheus error: {e}")
     
-    # Uptime за 24 часа
     uptime_query = f'avg_over_time(probe_success{{instance="{url}"}}[24h]) * 100'
     uptime = 0.0
     

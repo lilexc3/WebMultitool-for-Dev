@@ -1,7 +1,10 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import "./log-in-block.css";
 
 const LogInBlock = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="log-in-block">
       <h2 className="log-in-block__title">Welcome back</h2>
@@ -30,7 +33,10 @@ const LogInBlock = () => {
       <button type="submit">Log In</button>
 
       <p className="log-in-block__footer">
-        Don't have an account? <a href="/sign-up">Sign up</a>
+        Don't have an account?{" "}
+        <a onClick={() => navigate("/sign-up")} style={{ cursor: "pointer" }}>
+          Sign up
+        </a>
       </p>
     </div>
   );

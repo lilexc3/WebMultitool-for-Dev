@@ -1,7 +1,9 @@
 import React from "react";
 import "./sign-up.css";
+import { useNavigate } from "react-router-dom";
 
 const SignUp = () => {
+  const navigate = useNavigate();
   return (
     <div className="sign-up">
       <h2 className="sign-up__title">Create account</h2>
@@ -46,7 +48,10 @@ const SignUp = () => {
       <button type="submit">Sign Up</button>
 
       <p className="sign-up__footer">
-        Already have an account? <a href="/log-in">Log in</a>
+        Already have an account?{" "}
+        <a onClick={() => navigate("/log-in")} style={{ cursor: "pointer" }}>
+          Log in
+        </a>
       </p>
     </div>
   );

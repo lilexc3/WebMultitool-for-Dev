@@ -1,5 +1,3 @@
-/* image.css */
-
 .image-container {
   position: relative;
   z-index: 1;
@@ -20,7 +18,11 @@
 .image-container::after {
   content: "WebMultiTool";
   display: block;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   font-size: 20px;
   font-weight: 600;
   color: #ffffff;

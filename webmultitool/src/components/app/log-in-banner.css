@@ -15,7 +15,6 @@
   border: 1px solid #2a2a2a;
 }
 
-/* "Continue with GitHub" button — rendered via pseudo-element as in screenshot */
 .log-in-banner::before {
   content: "";
   display: block;
@@ -27,7 +26,6 @@
   margin-bottom: 0;
 }
 
-/* OR divider */
 .log-in-banner::after {
   content: "OR";
   display: block;
@@ -38,11 +36,6 @@
   letter-spacing: 1px;
 }
 
-/* GitHub button — we use the actual DOM button approach below */
-/* Since JSX has only log-in-button and sign-up-button,
-   we repurpose the ::before as the GitHub visual and add real buttons */
-
-/* Override: hide pseudo ::before, use real buttons */
 .log-in-banner::before {
   display: none;
 }
@@ -58,7 +51,6 @@
   order: 2;
 }
 
-/* GitHub button (log-in-button) */
 .log-in-button {
   order: 1;
   width: 100%;
@@ -66,7 +58,7 @@
   background-color: #222222;
   border: 1px solid #333333;
   border-radius: 6px;
-  font-size: 0; /* hide original text */
+  font-size: 0;
   color: #e0e0e0;
   cursor: pointer;
   transition:
@@ -80,7 +72,6 @@
 }
 
 .log-in-button::before {
-  /* GitHub icon placeholder circle */
   content: "";
   width: 18px;
   height: 18px;
@@ -102,7 +93,6 @@
   border-color: #404040;
 }
 
-/* Sign in with Email button */
 .sign-up-button {
   order: 3;
   width: 100%;
@@ -133,11 +123,6 @@
   border-color: #3a3a3a;
 }
 
-/* Sign up link — we need a 4th element but JSX only has 2 buttons.
-   We'll add a sign-up text link style if a 3rd element is added,
-   for now style what exists */
-
-/* If you add a third button with class sign-up-link: */
 .sign-up-link {
   order: 4;
   width: 100%;

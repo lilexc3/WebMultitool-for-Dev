@@ -177,8 +177,9 @@ class DevOpsAgent:
         url = params.get('url', 'http://localhost') if params else 'http://localhost'
         
         try:
+            insecure_tls = os.getenv("ALLOW_INSECURE_TLS", "false").lower() in ("1", "true", "yes")
             start = datetime.now()
-            resp = requests.get(url, timeout=10, verify=False)
+            resp = requests.get(url, timeout=10, verify=not insecure_tls)
             elapsed = (datetime.now() - start).total_seconds()
             
             return {

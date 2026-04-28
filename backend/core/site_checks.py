@@ -9,12 +9,14 @@ import socket
 import time
 from datetime import datetime
 from urllib.parse import urlparse
+import os
 
 def check_site_health(url: str) -> dict:
     """Быстрая проверка доступности сайта"""
     try:
         start = datetime.now()
-        resp = requests.get(url, timeout=10, verify=False)
+        insecure_tls = os.getenv("ALLOW_INSECURE_TLS", "false").lower() in ("1", "true", "yes")
+        resp = requests.get(url, timeout=10, verify=not insecure_tls)
         elapsed = (datetime.now() - start).total_seconds()
         return {
             "is_accessible": resp.status_code < 400,
@@ -47,7 +49,8 @@ def get_site_full_stats(url: str) -> dict:
     # HTTP проверка
     try:
         start = time.time()
-        resp = requests.get(url, timeout=10, verify=False, 
+        insecure_tls = os.getenv("ALLOW_INSECURE_TLS", "false").lower() in ("1", "true", "yes")
+        resp = requests.get(url, timeout=10, verify=not insecure_tls,
                            headers={'User-Agent': 'DevOpsLab-Monitor/2.0'})
         stats['http'] = {
             'status_code': resp.status_code,

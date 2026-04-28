@@ -1,6 +1,4 @@
 # monitoring/docker-compose.monitoring.yml
-version: '3.8'
-
 networks:
   devops-network:
     driver: bridge
@@ -51,6 +49,9 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     networks:
       - devops-network
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
 
 volumes:
   prometheus_data:

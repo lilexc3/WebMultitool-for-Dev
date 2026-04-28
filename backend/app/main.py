@@ -6,12 +6,13 @@ from typing import Optional, List
 from datetime import datetime
 import sys
 import os
-import sqlite3
 import logging
 import requests
 import secrets
 import json
 import re
+
+from app.database import init_database, fetch_one, fetch_all, execute, execute_returning_id
 
 # Добавляем путь к core
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,6 +31,11 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="DevOps WebApp API", version="1.0.0")
 
+
+@app.on_event("startup")
+def _startup():
+    init_database()
+
 # CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
@@ -40,7 +46,6 @@ app.add_middleware(
 )
 
 # Пути
-DB_PATH = os.getenv('DB_PATH', './data/sites.db')
 PROMETHEUS_URL = os.getenv('PROMETHEUS_URL', 'http://localhost:9090')
 
 # ============== МОДЕЛИ ДАННЫХ ==============
@@ -122,73 +127,74 @@ async def get_current_user(x_user_id: Optional[int] = Header(None)) -> int:
 
 def verify_agent_token(token: str) -> dict:
     """Проверить токен агента и вернуть site_id"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT id, user_id, url, name, git_repo_url 
-        FROM sites WHERE agent_token = ?
-    ''', (token,))
-    site = cursor.fetchone()
-    conn.close()
-    
+    site = fetch_one(
+        """
+        SELECT id, user_id, url, name, git_repo_url
+        FROM sites
+        WHERE agent_token = %s
+        """,
+        (token,),
+    )
+
     if site:
         return {
-            "site_id": site[0],
-            "user_id": site[1],
-            "url": site[2],
-            "name": site[3],
-            "git_repo_url": site[4]
+            "site_id": int(site["id"]),
+            "user_id": int(site["user_id"]),
+            "url": site["url"],
+            "name": site["name"],
+            "git_repo_url": site.get("git_repo_url"),
         }
     return None
 
 def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
     """Получить все сайты из БД (если указан user_id — только его)"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     if user_id is not None:
-        cursor.execute('''
-            SELECT id, user_id, url, name, active, created_at, 
+        sites = fetch_all(
+            """
+            SELECT id, user_id, url, name, active, created_at,
                    last_status, last_check, agent_connected, git_repo_url, agent_token
-            FROM sites WHERE user_id = ? ORDER BY created_at DESC
-        ''', (user_id,))
+            FROM sites
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
     else:
-        cursor.execute('''
-            SELECT id, user_id, url, name, active, created_at, 
+        sites = fetch_all(
+            """
+            SELECT id, user_id, url, name, active, created_at,
                    last_status, last_check, agent_connected, git_repo_url, agent_token
-            FROM sites ORDER BY created_at DESC
-        ''')
-    
-    sites = cursor.fetchall()
-    conn.close()
+            FROM sites
+            ORDER BY created_at DESC
+            """
+        )
     
     result = []
     for site in sites:
         result.append({
-            "id": site[0],
-            "user_id": site[1],
-            "url": site[2],
-            "name": site[3],
-            "active": bool(site[4]),
-            "created_at": site[5],
-            "last_status": site[6],
-            "last_check": site[7],
-            "agent_connected": bool(site[8]),
-            "git_repo_url": site[9],
-            "agent_token": site[10]
+            "id": int(site["id"]),
+            "user_id": int(site["user_id"]),
+            "url": site["url"],
+            "name": site["name"],
+            "active": bool(site["active"]),
+            "created_at": site["created_at"],
+            "last_status": site.get("last_status"),
+            "last_check": site.get("last_check"),
+            "agent_connected": bool(site["agent_connected"]),
+            "git_repo_url": site.get("git_repo_url"),
+            "agent_token": site.get("agent_token"),
         })
     return result
 
 def update_prometheus_targets():
     """Обновить файл targets.json для Prometheus"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, url, name FROM sites WHERE active = 1')
-    sites = cursor.fetchall()
-    conn.close()
+    sites = fetch_all("SELECT id, url, name FROM sites WHERE active = TRUE")
     
     targets = []
-    for site_id, url, name in sites:
+    for site in sites:
+        site_id = int(site["id"])
+        url = site["url"]
+        name = site["name"]
         targets.append({
             "targets": [url],
             "labels": {
@@ -199,7 +205,10 @@ def update_prometheus_targets():
             }
         })
     
-    targets_path = "./monitoring/prometheus/file_sd/targets.json"
+    targets_path = os.getenv(
+        "PROMETHEUS_FILE_SD_TARGETS",
+        "/shared/prometheus_file_sd/targets.json",
+    )
     os.makedirs(os.path.dirname(targets_path), exist_ok=True)
     
     with open(targets_path, 'w') as f:
@@ -263,22 +272,19 @@ async def create_site(req: SiteCreateRequest, user_id: int = Depends(get_current
     if not validate_url(req.url):
         raise HTTPException(status_code=400, detail="Invalid URL format. Must start with http:// or https://")
     
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     agent_token = secrets.token_urlsafe(32)
-    
+
     try:
-        cursor.execute('''
+        site_id = execute_returning_id(
+            """
             INSERT INTO sites (user_id, url, name, git_repo_url, agent_token)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, req.url, req.name, req.git_repo_url, agent_token))
-        conn.commit()
-        site_id = cursor.lastrowid
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Site with this URL already exists")
-    finally:
-        conn.close()
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (user_id, req.url, req.name, req.git_repo_url, agent_token),
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Failed to create site (possible duplicate)")
     
     update_prometheus_targets()
     
@@ -319,33 +325,27 @@ async def update_site(site_id: int, req: SiteUpdateRequest, user_id: int = Depen
     if site.get("user_id") != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     updates = []
     params = []
     
     if req.name is not None:
-        updates.append("name = ?")
+        updates.append("name = %s")
         params.append(req.name)
     if req.url is not None:
         if not validate_url(req.url):
             raise HTTPException(status_code=400, detail="Invalid URL format")
-        updates.append("url = ?")
+        updates.append("url = %s")
         params.append(req.url)
     if req.active is not None:
-        updates.append("active = ?")
-        params.append(1 if req.active else 0)
+        updates.append("active = %s")
+        params.append(bool(req.active))
     
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     
     params.append(site_id)
-    query = f"UPDATE sites SET {', '.join(updates)} WHERE id = ?"
-    
-    cursor.execute(query, params)
-    conn.commit()
-    conn.close()
+    query = f"UPDATE sites SET {', '.join(updates)} WHERE id = %s"
+    execute(query, tuple(params))
     
     update_prometheus_targets()
     
@@ -361,11 +361,7 @@ async def delete_site(site_id: int, user_id: int = Depends(get_current_user)):
     if site.get("user_id") != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM sites WHERE id = ?', (site_id,))
-    conn.commit()
-    conn.close()
+    execute("DELETE FROM sites WHERE id = %s", (site_id,))
     
     update_prometheus_targets()
     
@@ -383,15 +379,14 @@ async def check_site_by_id(site_id: int, user_id: int = Depends(get_current_user
     
     result = check_site_health(site["url"])
     
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE sites 
-        SET last_status = ?, last_check = CURRENT_TIMESTAMP 
-        WHERE id = ?
-    ''', (result.get("status_code", 0), site_id))
-    conn.commit()
-    conn.close()
+    execute(
+        """
+        UPDATE sites
+        SET last_status = %s, last_check = now()
+        WHERE id = %s
+        """,
+        (result.get("status_code", 0), site_id),
+    )
     
     return {
         "site_id": site_id,
@@ -529,12 +524,8 @@ async def websocket_agent_endpoint(websocket: WebSocket, token: str):
     site_id = site_info["site_id"]
     
     await manager.connect(websocket, token, site_id)
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('UPDATE sites SET agent_connected = 1 WHERE id = ?', (site_id,))
-    conn.commit()
-    conn.close()
+
+    execute("UPDATE sites SET agent_connected = TRUE WHERE id = %s", (site_id,))
     
     try:
         await websocket.send_json({
@@ -564,11 +555,7 @@ async def websocket_agent_endpoint(websocket: WebSocket, token: str):
         logger.error(f"WebSocket error: {e}")
     finally:
         manager.disconnect(token)
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('UPDATE sites SET agent_connected = 0 WHERE id = ?', (site_id,))
-        conn.commit()
-        conn.close()
+        execute("UPDATE sites SET agent_connected = FALSE WHERE id = %s", (site_id,))
 
 # ============== ЗАПУСК ==============
 if __name__ == "__main__":

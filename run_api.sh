@@ -3,4 +3,5 @@ cd "$(dirname "$0")"
 set -a
 source .env
 set +a
-python3 -m uvicorn backend.app.main:app --reload --port 8000
+cd backend
+python3 -m uvicorn app.main:app --reload --port 8000

@@ -1,22 +1,37 @@
-version: '3.8'
-
 networks:
   devops-network:
     driver: bridge
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devops-postgres
+    restart: always
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-devops_webapp}
+      - POSTGRES_USER=${POSTGRES_USER:-devops}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devops_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - devops-network
+
   # API сервер
   api:
     build: ./backend
     container_name: devops-api
     restart: always
+    depends_on:
+      - postgres
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./data:/app/data
+      - ./monitoring/prometheus/file_sd:/shared/prometheus_file_sd
     environment:
-      - DB_PATH=/app/data/sites.db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-devops}:${POSTGRES_PASSWORD:-devops_password}@postgres:5432/${POSTGRES_DB:-devops_webapp}
       - PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
       - GITLAB_URL=${GITLAB_URL}
       - GITLAB_TOKEN=${GITLAB_TOKEN}
@@ -50,7 +65,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus:/etc/prometheus
+      - ./monitoring/prometheus:/etc/prometheus
+      - ./monitoring/prometheus/file_sd:/etc/prometheus/file_sd
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -61,3 +77,4 @@ services:
 
 volumes:
   prometheus_data:
+  postgres_data:

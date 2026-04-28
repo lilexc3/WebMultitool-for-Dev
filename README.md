@@ -1,5 +1,5 @@
 # DevOps WebApp
-B
+
 Платформа для управления сайтами с мониторингом 24/7, автоматическим деплоем и откатом.
 
 ## Что умеет проект
@@ -28,7 +28,7 @@ B
 - При создании нового сайта он автоматически добавляется в мониторинг
 
 ### База данных
-- SQLite, три таблицы: пользователи, сайты, активные соединения агентов
+- PostgreSQL, три таблицы: пользователи, сайты, активные соединения агентов
 - У каждого сайта есть уникальный agent_token для безопасного подключения
 
 ### Публичный доступ
@@ -43,8 +43,8 @@ B
 
 2. Создайте файл .env с переменными окружения (пример в .env.example)
 
-3. Инициализируйте базу данных:
-   python3 backend/app/database.py
+3. Поднимите Postgres и API:
+   docker compose up -d postgres api
 
 4. Запустите мониторинг:
    cd monitoring
@@ -73,7 +73,7 @@ devops-webapp/
 │   ├── app/
 │   │   ├── main.py        # FastAPI приложение
 │   │   ├── models.py      # Pydantic модели
-│   │   ├── database.py    # Работа с SQLite
+│   │   ├── database.py    # Подключение к Postgres + схема
 │   │   └── websocket.py   # Менеджер WebSocket соединений
 │   └── core/
 │       ├── site_checks.py # Проверка сайтов (HTTP, Ping, DNS, SSL)
@@ -92,8 +92,7 @@ devops-webapp/
 │   │   └── blackbox.yml
 │   └── alertmanager/
 │       └── alertmanager.yml
-├── data/
-│   └── sites.db           # База данных SQLite
+├── data/                  # (устарело) ранее хранилась SQLite база
 ├── .env                   # Переменные окружения
 ├── .env.example           # Пример конфигурации
 ├── run_api.sh             # Скрипт запуска API
@@ -125,4 +124,7 @@ GITLAB_URL            - URL вашего GitLab
 GITLAB_TOKEN          - токен для GitLab API
 GITLAB_PROJECT_ID     - ID проекта в GitLab
 PROMETHEUS_URL        - URL Prometheus (по умолчанию http://localhost:9090)
-DB_PATH               - путь к базе данных (./data/sites.db)
+POSTGRES_DB           - имя базы Postgres
+POSTGRES_USER         - пользователь Postgres
+POSTGRES_PASSWORD     - пароль Postgres
+DATABASE_URL          - строка подключения (postgresql://user:pass@host:5432/dbname)

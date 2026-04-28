@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from jose import jwt
+import bcrypt
+import secrets as crypto_secrets
 import sys
 import os
 import logging
@@ -45,10 +48,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Безопасность
+SECRET_KEY = os.getenv('SECRET_KEY', crypto_secrets.token_urlsafe(32))
+ALGORITHM = "HS256"
+
 # Пути
 PROMETHEUS_URL = os.getenv('PROMETHEUS_URL', 'http://localhost:9090')
 
 # ============== МОДЕЛИ ДАННЫХ ==============
+class UserRegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
 class SiteCheckRequest(BaseModel):
     url: str
 
@@ -112,6 +132,25 @@ manager = ConnectionManager()
 
 # ============== Вспомогательные функции ==============
 
+def hash_password(password: str) -> str:
+    """Хеширование пароля через bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Проверка пароля через bcrypt"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def create_access_token(user_id: int) -> str:
+    to_encode = {"user_id": user_id}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def get_user_from_token(token: str) -> Optional[int]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("user_id")
+    except:
+        return None
+
 def validate_url(url: str) -> bool:
     """Проверяет, что URL валидный"""
     if not url.startswith(('http://', 'https://')):
@@ -119,11 +158,23 @@ def validate_url(url: str) -> bool:
     pattern = r'^https?://([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:[0-9]+)?(/.*)?$|^https?://(\d{1,3}\.){3}\d{1,3}(:[0-9]+)?(/.*)?$'
     return re.match(pattern, url) is not None
 
-async def get_current_user(x_user_id: Optional[int] = Header(None)) -> int:
-    """Временная авторизация через заголовок"""
-    if x_user_id is None:
-        raise HTTPException(status_code=401, detail="X-User-ID header required")
-    return x_user_id
+async def get_current_user(
+    x_user_id: Optional[int] = Header(None),
+    authorization: Optional[str] = Header(None)
+) -> int:
+    """Авторизация через JWT токен или X-User-ID (для обратной совместимости)"""
+    # Пробуем JWT токен
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        user_id = get_user_from_token(token)
+        if user_id:
+            return user_id
+    
+    # Fallback на X-User-ID
+    if x_user_id is not None:
+        return x_user_id
+    
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 def verify_agent_token(token: str) -> dict:
     """Проверить токен агента и вернуть site_id"""
@@ -224,6 +275,54 @@ def update_prometheus_targets():
 
 # ============== API ЭНДПОИНТЫ ==============
 
+@app.post("/api/auth/register")
+async def register_user(req: UserRegisterRequest):
+    """Регистрация нового пользователя"""
+    # Проверяем, что email не занят
+    existing = fetch_one("SELECT id FROM users WHERE email = %s", (req.email,))
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    password_hash = hash_password(req.password)
+    
+    user_id = execute_returning_id(
+        """
+        INSERT INTO users (email, password_hash, name)
+        VALUES (%s, %s, %s)
+        RETURNING id
+        """,
+        (req.email, password_hash, req.name),
+    )
+    
+    token = create_access_token(user_id)
+    
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "access_token": token,
+        "token_type": "bearer",
+        "message": "User registered successfully"
+    }
+
+@app.post("/api/auth/login")
+async def login_user(req: UserLoginRequest):
+    """Вход пользователя"""
+    user = fetch_one("SELECT id, password_hash FROM users WHERE email = %s", (req.email,))
+    
+    if not user or not verify_password(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    user_id = int(user["id"])
+    token = create_access_token(user_id)
+    
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "access_token": token,
+        "token_type": "bearer",
+        "message": "Login successful"
+    }
+
 @app.get("/")
 async def root():
     return {"message": "DevOps WebApp API", "version": "1.0.0", "docs": "/docs"}
@@ -283,8 +382,9 @@ async def create_site(req: SiteCreateRequest, user_id: int = Depends(get_current
             """,
             (user_id, req.url, req.name, req.git_repo_url, agent_token),
         )
-    except Exception:
-        raise HTTPException(status_code=400, detail="Failed to create site (possible duplicate)")
+    except Exception as e:
+        logger.error(f"Failed to create site: {e}")  # ← ДОБАВИТЬ ЭТУ СТРОКУ
+        raise HTTPException(status_code=400, detail=f"Failed to create site: {str(e)}")
     
     update_prometheus_targets()
     

@@ -3,8 +3,11 @@
 Функции деплоя и отката (логика из bot.py)
 """
 import os
+import sys
 import requests
 from app.database import fetch_one
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 GITLAB_URL = os.getenv('GITLAB_URL', 'http://192.168.0.107:8929')
 GITLAB_TOKEN = os.getenv('GITLAB_TOKEN', '')

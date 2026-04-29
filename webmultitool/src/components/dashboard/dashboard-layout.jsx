@@ -13,7 +13,9 @@ const DashboardLayout = () => {
       {/* Sidebar */}
       <aside className="dashboard__sidebar">
         <div className="dashboard__logo">
-          <span>Web<em>MultiTool</em></span>
+          <span>
+            Web<em>MultiTool</em>
+          </span>
         </div>
 
         <nav className="dashboard__nav">
@@ -30,19 +32,16 @@ const DashboardLayout = () => {
           <span className="dashboard__nav-section">Account</span>
 
           <button
-            className={`dashboard__nav-item ${isActive("/dashboard/settings") ? "dashboard__nav-item--active" : ""}`}
-            onClick={() => navigate("/dashboard/settings")}
+            className={`dashboard__nav-item ${isActive("/dashboard/account") ? "dashboard__nav-item--active" : ""}`}
+            onClick={() => navigate("/dashboard/account")}
           >
             <span className="nav-dot" />
-            Settings
+            Account
           </button>
         </nav>
 
         <div className="dashboard__sidebar-footer">
-          <button
-            className="dashboard__nav-item"
-            onClick={() => navigate("/")}
-          >
+          <button className="dashboard__nav-item" onClick={() => navigate("/")}>
             <span className="nav-dot" />
             Log out
           </button>

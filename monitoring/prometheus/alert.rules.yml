@@ -1,0 +1,12 @@
+groups:
+  - name: sites
+    interval: 30s
+    rules:
+      - alert: SiteDown
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🚨 Сайт недоступен: {{ $labels.instance }}"
+          description: "Сайт не отвечает более 1 минуты"

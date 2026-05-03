@@ -1,0 +1,11 @@
+# ~/devops-webapp/.gitignore
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.env
+*.log
+data/*.db
+.DS_Store
+monitoring/prometheus/file_sd/targets.json

@@ -1,0 +1,80 @@
+networks:
+  devops-network:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devops-postgres
+    restart: always
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-devops_webapp}
+      - POSTGRES_USER=${POSTGRES_USER:-devops}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devops_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - devops-network
+
+  # API сервер
+  api:
+    build: ./backend
+    container_name: devops-api
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./monitoring/prometheus/file_sd:/shared/prometheus_file_sd
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-devops}:${POSTGRES_PASSWORD:-devops_password}@postgres:5432/${POSTGRES_DB:-devops_webapp}
+      - PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
+      - GITLAB_URL=${GITLAB_URL}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      - GITLAB_PROJECT_ID=${GITLAB_PROJECT_ID}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    networks:
+      - devops-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Alert Bot (только алерты)
+  alert-bot:
+    build: .
+    container_name: alert-bot
+    restart: always
+    volumes:
+      - ./alert_bot.py:/app/alert_bot.py
+      - ./.env:/app/.env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    networks:
+      - devops-network
+    command: python alert_bot.py
+
+  # Prometheus (можно переиспользовать существующий)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - ./monitoring/prometheus/file_sd:/etc/prometheus/file_sd
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - devops-network
+
+volumes:
+  prometheus_data:
+  postgres_data:

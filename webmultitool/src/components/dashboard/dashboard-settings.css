@@ -1,0 +1,12 @@
+.dash-settings__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.dash-settings__subtitle {
+  font-size: 13px;
+  color: #505050;
+  margin-bottom: 28px;
+}

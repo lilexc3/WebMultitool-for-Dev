@@ -1,0 +1,132 @@
+.step2-container {
+  background-color: #161616;
+  border: 1px solid #252525;
+  border-radius: 10px;
+  padding: 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.step2-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: #c0c0c0;
+  margin: 0;
+}
+
+.step2-title::before {
+  content: "Step 2: ";
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.copy-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #111111;
+  border: 1px solid #252525;
+  border-radius: 8px;
+  padding: 14px 16px;
+  padding-right: 90px;
+  min-height: 64px;
+}
+
+.copy-field__text {
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+  font-size: 12px;
+  color: #909090;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copy-field button,
+.copy-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 7px 18px;
+  background-color: #252525;
+  border: 1px solid #363636;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.copy-field button:hover,
+.copy-btn:hover {
+  background-color: #303030;
+  border-color: #444444;
+}
+
+.copy-field button:active,
+.copy-btn:active {
+  transform: translateY(-50%) scale(0.97);
+}
+
+.check-connection-btn {
+  width: 100%;
+  padding: 13px 24px;
+  background-color: #161e26;
+  border: 1px solid #243040;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.check-connection-btn::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background-color: #00d97e;
+  border-radius: 50%;
+  box-shadow: 0 0 7px rgba(0, 217, 126, 0.6);
+  flex-shrink: 0;
+}
+
+.check-connection-btn:hover {
+  background-color: #1c2a36;
+  border-color: #2e4055;
+}
+
+@media (max-width: 600px) {
+  .copy-field {
+    flex-direction: column;
+    padding: 14px;
+    padding-bottom: 56px;
+    align-items: flex-start;
+  }
+
+  .copy-field__text {
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .copy-field button,
+  .copy-btn {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    top: auto;
+    transform: none;
+  }
+}

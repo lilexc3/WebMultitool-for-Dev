@@ -1,0 +1,82 @@
+.log-in-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  background-color: #111111;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+.log-in-page__image {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(135deg, #0d1117 0%, #0f1a1a 60%, #0a1515 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.log-in-page__image::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse at 60% 50%,
+      rgba(0, 200, 150, 0.14) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 80% 70%,
+      rgba(0, 150, 120, 0.08) 0%,
+      transparent 40%
+    );
+  pointer-events: none;
+}
+
+.log-in-page__image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 200, 170, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 170, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.log-in-page__block {
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #111111;
+  border-left: 1px solid #1e1e1e;
+  padding: 48px 40px;
+}
+
+@media (max-width: 768px) {
+  .log-in-page {
+    flex-direction: column;
+  }
+
+  .log-in-page__image {
+    min-height: 220px;
+    flex: none;
+  }
+
+  .log-in-page__block {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #1e1e1e;
+    padding: 32px 20px;
+  }
+}

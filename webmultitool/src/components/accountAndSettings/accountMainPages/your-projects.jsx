@@ -1,49 +1,35 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { getSites } from "../../../api";
 import "./your-projects.css";
 
-const MOCK_PROJECTS = [
-  {
-    id: "1",
-    name: "my-app",
-    domain: "my-app.webmultitool.ru",
-    status: "online",
-    date: "2h ago",
-  },
-  {
-    id: "2",
-    name: "landing-page",
-    domain: "landing.webmultitool.ru",
-    status: "online",
-    date: "1d ago",
-  },
-  {
-    id: "3",
-    name: "api-service",
-    domain: "api.webmultitool.ru",
-    status: "offline",
-    date: "3d ago",
-  },
-];
-
 const YourProjects = () => {
+  const [sites, setSites] = useState([]);
+  useEffect(() => {
+    getSites().then(setSites).catch(console.error);
+  }, []);
   return (
     <div>
       <h1 className="your-projects__title">Your Projects</h1>
-      <p className="your-projects__subtitle">
-        All sites connected to your account
-      </p>
-
       <div className="your-projects__grid">
-        {MOCK_PROJECTS.map((p) => (
-          <div key={p.id} className="project-card">
-            <div className="project-card__name">{p.name}</div>
-            <div className="project-card__domain">{p.domain}</div>
+        {sites.map((site) => (
+          <div key={site.id} className="project-card">
+            <div className="project-card__name">{site.name}</div>
+            <div className="project-card__domain">{site.url}</div>
             <div className="project-card__footer">
               <div className="project-card__status">
-                <span className={`status-dot status-dot--${p.status}`} />
-                {p.status}
+                <span
+                  className={`status-dot ${
+                    site.agent_connected
+                      ? "status-dot--online"
+                      : "status-dot--offline"
+                  }`}
+                />
+                {site.agent_connected
+                  ? "online"
+                  : site.last_status === 200
+                    ? "online"
+                    : "offline"}
               </div>
-              <span className="project-card__date">{p.date}</span>
             </div>
           </div>
         ))}

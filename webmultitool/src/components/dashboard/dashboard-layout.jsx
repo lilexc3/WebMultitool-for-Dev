@@ -1,12 +1,14 @@
 import React from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import "./dashboard-layout.css";
+import { useAuth } from "../../contexts/AuthContext";
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const isActive = (path) => location.pathname.startsWith(path);
+  const { logout } = useAuth();
 
   return (
     <div className="dashboard">
@@ -41,7 +43,7 @@ const DashboardLayout = () => {
         </nav>
 
         <div className="dashboard__sidebar-footer">
-          <button className="dashboard__nav-item" onClick={() => navigate("/")}>
+          <button className="dashboard__nav-item" onClick={logout}>
             <span className="nav-dot" />
             Log out
           </button>

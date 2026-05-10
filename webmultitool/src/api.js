@@ -1,4 +1,4 @@
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const getToken = () => localStorage.getItem("access_token");
 const setToken = (token) => localStorage.setItem("access_token", token);

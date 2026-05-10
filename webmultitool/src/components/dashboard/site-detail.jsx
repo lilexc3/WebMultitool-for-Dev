@@ -1,141 +1,93 @@
-import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  getSite,
+  updateSite,
+  deploySite,
+  rollbackSite,
+  getSiteMetrics,
+  getFullStats,
+} from "../../api";
 import "./site-detail.css";
 
 const TABS = ["Overview", "Metrics", "Deploy", "Settings"];
 
-const MOCK_SITES = {
-  "1": { name: "my-app", domain: "my-app.webmultitool.ru", status: "online" },
-  "2": { name: "landing-page", domain: "landing.webmultitool.ru", status: "online" },
-  "3": { name: "api-service", domain: "api.webmultitool.ru", status: "offline" },
-};
-
-/* ── Tab components ── */
-
-const OverviewTab = () => (
-  <div>
-    <div className="overview-grid">
-      <div className="stat-card">
-        <div className="stat-card__label">Uptime</div>
-        <div className="stat-card__value">99.8%</div>
-        <div className="stat-card__sub stat-card__sub--up">↑ last 30 days</div>
-      </div>
-      <div className="stat-card">
-        <div className="stat-card__label">Deploys</div>
-        <div className="stat-card__value">12</div>
-        <div className="stat-card__sub">last deploy 2h ago</div>
-      </div>
-      <div className="stat-card">
-        <div className="stat-card__label">Avg Response</div>
-        <div className="stat-card__value">142ms</div>
-        <div className="stat-card__sub stat-card__sub--up">↓ -12ms</div>
-      </div>
-    </div>
-  </div>
-);
-
-const MetricsTab = () => {
-  const bars = [
-    { label: "CPU", value: 38 },
-    { label: "RAM", value: 61 },
-    { label: "Disk", value: 24 },
-    { label: "Net", value: 52 },
-  ];
-  return (
-    <div className="settings-section">
-      <div className="settings-section__title">Resource Usage</div>
-      <div className="settings-section__desc">Current server metrics</div>
-      <div className="metrics-bar-row">
-        {bars.map((b) => (
-          <div key={b.label} className="metrics-bar-item">
-            <span className="metrics-bar-item__label">{b.label}</span>
-            <div className="metrics-bar-item__track">
-              <div className="metrics-bar-item__fill" style={{ width: `${b.value}%` }} />
-            </div>
-            <span className="metrics-bar-item__val">{b.value}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const DeployTab = () => {
-  const logs = [
-    { time: "14:32:01", msg: "Build started", badge: null },
-    { time: "14:32:18", msg: "Dependencies installed", badge: null },
-    { time: "14:32:45", msg: "Build completed", badge: "success" },
-    { time: "14:33:02", msg: "Deployed to production", badge: "success" },
-    { time: "11:10:33", msg: "Deploy failed — timeout", badge: "fail" },
-  ];
-
-  return (
-    <div>
-      <div className="deploy-actions">
-        <button className="btn-deploy">Deploy</button>
-        <button className="btn-rollback">↩ Rollback</button>
-      </div>
-      <div className="deploy-log">
-        <div className="deploy-log__title">Deploy History</div>
-        {logs.map((l, i) => (
-          <div key={i} className="deploy-log__item">
-            <span className="deploy-log__time">{l.time}</span>
-            <span className="deploy-log__msg">{l.msg}</span>
-            {l.badge && (
-              <span className={`deploy-log__badge deploy-log__badge--${l.badge}`}>
-                {l.badge}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const SettingsTab = ({ site }) => (
-  <div>
-    <div className="settings-section">
-      <div className="settings-section__title">General</div>
-      <div className="settings-section__desc">Basic site configuration</div>
-      <div className="settings-field">
-        <label>Site name</label>
-        <input type="text" defaultValue={site.name} />
-      </div>
-      <div className="settings-field">
-        <label>Domain</label>
-        <input type="text" defaultValue={site.domain} />
-      </div>
-      <button className="btn-save">Save changes</button>
-    </div>
-
-    <div className="settings-section">
-      <div className="settings-section__title">Danger Zone</div>
-      <div className="settings-section__desc">Irreversible actions — be careful</div>
-      <button className="btn-danger">Delete site</button>
-    </div>
-  </div>
-);
-
-/* ── Main component ── */
-
 const SiteDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [site, setSite] = useState(null);
+  const [metrics, setMetrics] = useState(null);
+  const [fullStats, setFullStats] = useState(null);
   const [activeTab, setActiveTab] = useState("Overview");
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
-  const site = MOCK_SITES[id] || { name: "Unknown", domain: "—", status: "offline" };
+  const fetchData = async () => {
+    try {
+      const [siteData, metricsData, statsData] = await Promise.all([
+        getSite(id),
+        getSiteMetrics(id),
+        getFullStats(id),
+      ]);
+      setSite(siteData);
+      setMetrics(metricsData);
+      setFullStats(statsData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [id]);
+
+  const handleUpdate = async (field, value) => {
+    setUpdating(true);
+    try {
+      await updateSite(id, { [field]: value });
+      await fetchData();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeploy = async () => {
+    try {
+      const res = await deploySite(id);
+      alert(res.message || "Deploy command sent");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleRollback = async () => {
+    try {
+      const res = await rollbackSite(id);
+      alert(res.message || "Rollback command sent");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  if (loading) return <div style={{ color: "#fff" }}>Loading site...</div>;
+  if (!site) return <div style={{ color: "#fff" }}>Site not found</div>;
 
   return (
     <div>
       <div className="site-detail__header">
         <div>
           <h1 className="site-detail__title">{site.name}</h1>
-          <div className="site-detail__domain">{site.domain}</div>
+          <div className="site-detail__domain">{site.url}</div>
         </div>
         <div className="site-detail__status">
-          <span className={`status-dot status-dot--${site.status}`} />
-          {site.status}
+          <span
+            className={`status-dot status-dot--${metrics?.is_up ? "online" : "offline"}`}
+          />
+          {metrics?.is_up ? "Online" : "Offline"}
         </div>
       </div>
 
@@ -151,10 +103,153 @@ const SiteDetail = () => {
         ))}
       </div>
 
-      {activeTab === "Overview"  && <OverviewTab />}
-      {activeTab === "Metrics"   && <MetricsTab />}
-      {activeTab === "Deploy"    && <DeployTab />}
-      {activeTab === "Settings"  && <SettingsTab site={site} />}
+      {activeTab === "Overview" && (
+        <div>
+          <div className="overview-grid">
+            <div className="stat-card">
+              <div className="stat-card__label">Uptime (24h)</div>
+              <div className="stat-card__value">
+                {metrics?.uptime_24h ?? 0}%
+              </div>
+              <div className="stat-card__sub">
+                {metrics?.is_up ? "Currently UP" : "Currently DOWN"}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card__label">HTTP Status</div>
+              <div className="stat-card__value">
+                {fullStats?.http?.status_code || "N/A"}
+              </div>
+              <div className="stat-card__sub">
+                Response: {fullStats?.http?.response_time || 0}ms
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card__label">SSL Expiry</div>
+              <div className="stat-card__value">
+                {fullStats?.ssl?.days_left ?? "N/A"} days
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Metrics" && (
+        <div className="settings-section">
+          <div className="settings-section__title">
+            Resource & Network Metrics
+          </div>
+          <div className="metrics-bar-row">
+            {fullStats?.ping && (
+              <div className="metrics-bar-item">
+                <span className="metrics-bar-item__label">Ping</span>
+                <div className="metrics-bar-item__track">
+                  <div
+                    className="metrics-bar-item__fill"
+                    style={{
+                      width: `${Math.min(100, fullStats.ping.latency_ms / 10)}%`,
+                    }}
+                  />
+                </div>
+                <span className="metrics-bar-item__val">
+                  {fullStats.ping.latency_ms} ms
+                </span>
+              </div>
+            )}
+            {fullStats?.dns && (
+              <div className="metrics-bar-item">
+                <span className="metrics-bar-item__label">DNS</span>
+                <div className="metrics-bar-item__track">
+                  <div
+                    className="metrics-bar-item__fill"
+                    style={{ width: fullStats.dns.resolved ? 100 : 0 }}
+                  />
+                </div>
+                <span className="metrics-bar-item__val">
+                  {fullStats.dns.resolved ? "OK" : "Failed"}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Deploy" && (
+        <div>
+          <div className="deploy-actions">
+            <button className="btn-deploy" onClick={handleDeploy}>
+              Deploy
+            </button>
+            <button className="btn-rollback" onClick={handleRollback}>
+              ↩ Rollback
+            </button>
+          </div>
+          <div className="deploy-log">
+            <div className="deploy-log__title">Deploy History</div>
+            <div className="deploy-log__item">
+              <span className="deploy-log__msg">
+                Use GitLab / Agent to track history
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Settings" && (
+        <div>
+          <div className="settings-section">
+            <div className="settings-section__title">General</div>
+            <div className="settings-field">
+              <label>Site name</label>
+              <input
+                type="text"
+                defaultValue={site.name}
+                onBlur={(e) => handleUpdate("name", e.target.value)}
+                disabled={updating}
+              />
+            </div>
+            <div className="settings-field">
+              <label>URL</label>
+              <input
+                type="text"
+                defaultValue={site.url}
+                onBlur={(e) => handleUpdate("url", e.target.value)}
+                disabled={updating}
+              />
+            </div>
+            <div className="settings-field">
+              <label>Active monitoring</label>
+              <input
+                type="checkbox"
+                checked={site.active}
+                onChange={(e) => handleUpdate("active", e.target.checked)}
+                disabled={updating}
+              />
+            </div>
+            <button
+              className="btn-save"
+              disabled={updating}
+              style={{ marginTop: 12 }}
+            >
+              Save (auto on blur)
+            </button>
+          </div>
+          <div className="settings-section">
+            <div className="settings-section__title">Danger Zone</div>
+            <button
+              className="btn-danger"
+              onClick={() => {
+                if (window.confirm("Delete this site permanently?")) {
+                  // реализуйте удаление отдельно или сделайте редирект на список
+                  window.location.href = `/dashboard/sites`;
+                }
+              }}
+            >
+              Delete site
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

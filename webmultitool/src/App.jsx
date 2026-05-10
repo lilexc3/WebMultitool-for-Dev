@@ -1,42 +1,29 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import "./app.css";
-import StartBanner from "./components/app/start-banner";
-import Step1 from "./components/app/step1";
-import Step2 from "./components/app/step2";
-import LogInPage from "./components/logInAndSignUp/log-in-page";
-import SignUpPage from "./components/logInAndSignUp/sign-up-page";
-import DashboardLayout from "./components/dashboard/dashboard-layout";
-import SitesList from "./components/dashboard/sites-list";
-import SiteDetail from "./components/dashboard/site-detail";
-import SiteNew from "./components/dashboard/site-new";
-import AcoountMainPage from "./components/accountAndSettings/acoount-main-page";
+import { PrivateRoute } from "./components/PrivateRoute";
+import LogInPage from "./components/loginAndSignUp/log-in-page.jsx";
+import SignUpPage from "./components/loginAndSignUp/sign-up-page.jsx";
+import DashboardLayout from "./components/dashboard/dashboard-layout.jsx";
+import SitesList from "./components/dashboard/sites-list.jsx";
+import SiteNew from "./components/dashboard/site-new.jsx";
+import SiteDetail from "./components/dashboard/site-detail.jsx";
+import AcoountMainPage from "./components/accountAndSettings/acoount-main-page.jsx";
+import "./App.css";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Landing */}
-        <Route
-          path="/"
-          element={
-            <div className="Start-New-Page">
-              <StartBanner />
-              <h3 className="onboarding-title">onboarding</h3>
-              <div className="onboarding-steps">
-                <Step1 />
-                <Step2 />
-              </div>
-            </div>
-          }
-        />
-
-        {/* Auth */}
         <Route path="/log-in" element={<LogInPage />} />
         <Route path="/sign-up" element={<SignUpPage />} />
-
-        {/* Dashboard */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<Navigate to="/dashboard/sites" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard/sites" />} />
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <DashboardLayout />
+            </PrivateRoute>
+          }
+        >
           <Route path="sites" element={<SitesList />} />
           <Route path="sites/new" element={<SiteNew />} />
           <Route path="sites/:id" element={<SiteDetail />} />

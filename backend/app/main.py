@@ -1,6 +1,8 @@
 # backend/app/main.py
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+load_dotenv()
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime

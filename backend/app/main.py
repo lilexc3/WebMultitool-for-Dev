@@ -390,7 +390,7 @@ async def create_site(req: SiteCreateRequest, user_id: int = Depends(get_current
     
     update_prometheus_targets()
     
-    agent_command = f"docker run -d --restart always --name devops-agent -e AGENT_TOKEN={agent_token} -e API_URL=ws://your-server:8000/ws/agent -v /var/run/docker.sock:/var/run/docker.sock lilexc3/webmultitool-agent:latest"
+    agent_command = f"docker run -d --restart always --name devops-agent -e AGENT_TOKEN={agent_token} -e API_URL=ws://host.docker.internal:8000/ws/agent -v /var/run/docker.sock:/var/run/docker.sock lilexc3/webmultitool-agent:latest"
     
     return {
         "status": "ok",

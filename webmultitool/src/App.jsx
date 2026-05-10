@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { PrivateRoute } from "./components/PrivateRoute";
-import LogInPage from "./components/loginAndSignUp/log-in-page.jsx";
-import SignUpPage from "./components/loginAndSignUp/sign-up-page.jsx";
+import LogInPage from "./components/logInAndSignUp/log-in-page.jsx";
+import SignUpPage from "./components/logInAndSignUp/sign-up-page.jsx";
 import DashboardLayout from "./components/dashboard/dashboard-layout.jsx";
 import SitesList from "./components/dashboard/sites-list.jsx";
 import SiteNew from "./components/dashboard/site-new.jsx";

@@ -1,192 +1,80 @@
-import React, { useEffect, useState } from "react";
-import {
-  getMe,
-  updateMe,
-  changePassword,
-  deleteAccount,
-  logout,
-} from "../../../api";
+import React from "react";
+import { useAuth } from "../../../contexts/AuthContext";
 import "./account-settings.css";
 
 const AccountSettings = () => {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMsg, setProfileMsg] = useState(null);
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordMsg, setPasswordMsg] = useState(null);
-
-  useEffect(() => {
-    getMe()
-      .then((data) => {
-        setName(data.name || "");
-        setEmail(data.email || "");
-      })
-      .catch(console.error);
-  }, []);
-
-  const handleProfileSave = async () => {
-    setProfileSaving(true);
-    setProfileMsg(null);
-    try {
-      await updateMe({ name, email });
-      setProfileMsg({ type: "success", text: "Profile saved" });
-    } catch (err) {
-      setProfileMsg({ type: "error", text: err.message });
-    } finally {
-      setProfileSaving(false);
-    }
-  };
-
-  const handlePasswordChange = async () => {
-    setPasswordSaving(true);
-    setPasswordMsg(null);
-    try {
-      await changePassword(currentPassword, newPassword);
-      setPasswordMsg({ type: "success", text: "Password updated" });
-      setCurrentPassword("");
-      setNewPassword("");
-    } catch (err) {
-      setPasswordMsg({ type: "error", text: err.message });
-    } finally {
-      setPasswordSaving(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (
-      !window.confirm("Delete your account permanently? This cannot be undone.")
-    )
-      return;
-    try {
-      await deleteAccount();
-      logout();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+  const { user, logout } = useAuth();
 
   return (
     <div className="account-settings">
       <h1 className="account-settings__title">Account Settings</h1>
       <p className="account-settings__subtitle">
-        Manage your profile and preferences
+        Your session is tied to the API user below. Profile and password changes
+        are not exposed by the API yet—use this panel to review your account and
+        sign out.
       </p>
 
       <div className="account-settings__section">
-        <div className="account-settings__section-title">Profile</div>
+        <div className="account-settings__section-title">Session</div>
         <div className="account-settings__section-desc">
-          Your personal information
+          Authenticated user from your last login or sign-up
         </div>
 
         <div className="account-settings__field">
-          <label htmlFor="username">Name</label>
+          <label htmlFor="user-id">User ID</label>
           <input
             type="text"
-            id="username"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
+            id="user-id"
+            name="user-id"
+            readOnly
+            value={user?.id != null ? String(user.id) : ""}
+            placeholder="—"
           />
         </div>
 
+        <button type="button" className="account-settings__save" onClick={logout}>
+          Log out
+        </button>
+      </div>
+
+      <div className="account-settings__section">
+        <div className="account-settings__section-title">Profile &amp; password</div>
+        <div className="account-settings__section-desc">
+          The backend currently provides register, login, and JWT access only.
+          When user profile endpoints are added, this form can be wired the same
+          way as the sites screens.
+        </div>
         <div className="account-settings__field">
-          <label htmlFor="email">Email</label>
+          <label htmlFor="email-placeholder">Email</label>
           <input
             type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            id="email-placeholder"
+            disabled
+            placeholder="Not available from API"
           />
         </div>
-
-        {profileMsg && (
-          <div
-            style={{
-              color: profileMsg.type === "success" ? "#4ade80" : "#f87171",
-              marginBottom: 8,
-              fontSize: 13,
-            }}
-          >
-            {profileMsg.text}
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="account-settings__save"
-          onClick={handleProfileSave}
-          disabled={profileSaving}
-        >
-          {profileSaving ? "Saving..." : "Save Changes"}
+        <div className="account-settings__field">
+          <label htmlFor="name-placeholder">Display name</label>
+          <input
+            type="text"
+            id="name-placeholder"
+            disabled
+            placeholder="Not available from API"
+          />
+        </div>
+        <button type="button" className="account-settings__save" disabled>
+          Save changes
         </button>
       </div>
 
       <div className="account-settings__section">
-        <div className="account-settings__section-title">Password</div>
+        <div className="account-settings__section-title">Danger zone</div>
         <div className="account-settings__section-desc">
-          Change your login password
+          Account deletion is not implemented in the API. Remove individual sites
+          from the Sites list instead.
         </div>
-
-        <div className="account-settings__field">
-          <label htmlFor="current-password">Current Password</label>
-          <input
-            type="password"
-            id="current-password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </div>
-
-        <div className="account-settings__field">
-          <label htmlFor="new-password">New Password</label>
-          <input
-            type="password"
-            id="new-password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </div>
-
-        {passwordMsg && (
-          <div
-            style={{
-              color: passwordMsg.type === "success" ? "#4ade80" : "#f87171",
-              marginBottom: 8,
-              fontSize: 13,
-            }}
-          >
-            {passwordMsg.text}
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="account-settings__save"
-          onClick={handlePasswordChange}
-          disabled={passwordSaving || !currentPassword || !newPassword}
-        >
-          {passwordSaving ? "Updating..." : "Update Password"}
-        </button>
-      </div>
-
-      <div className="account-settings__section">
-        <div className="account-settings__section-title">Danger Zone</div>
-        <div className="account-settings__section-desc">
-          Permanently delete your account and all data
-        </div>
-        <button
-          type="button"
-          className="account-settings__danger"
-          onClick={handleDeleteAccount}
-        >
-          Delete Account
+        <button type="button" className="account-settings__danger" disabled>
+          Delete account
         </button>
       </div>
     </div>

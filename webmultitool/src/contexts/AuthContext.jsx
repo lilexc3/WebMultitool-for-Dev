@@ -15,20 +15,20 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem("access_token");
     const userId = localStorage.getItem("user_id");
     if (token && userId) {
-      setUser({ id: userId });
+      setUser({ id: String(userId) });
     }
     setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     const data = await apiLogin(email, password);
-    setUser({ id: data.user_id });
+    setUser({ id: String(data.user_id) });
     return data;
   };
 
   const register = async (email, password, name) => {
     const data = await apiRegister(email, password, name);
-    setUser({ id: data.user_id });
+    setUser({ id: String(data.user_id) });
     return data;
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   getSite,
@@ -7,10 +7,21 @@ import {
   rollbackSite,
   getSiteMetrics,
   getFullStats,
+  deleteSite,
+  checkSiteById,
 } from "../../api";
 import "./site-detail.css";
 
 const TABS = ["Overview", "Metrics", "Deploy", "Settings"];
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const SiteDetail = () => {
   const { id } = useParams();
@@ -20,9 +31,11 @@ const SiteDetail = () => {
   const [fullStats, setFullStats] = useState(null);
   const [activeTab, setActiveTab] = useState("Overview");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [lastAction, setLastAction] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [siteData, metricsData, statsData] = await Promise.all([
         getSite(id),
@@ -37,11 +50,25 @@ const SiteDetail = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
+    setLoading(true);
     fetchData();
-  }, [id]);
+  }, [fetchData]);
+
+  const handleRefreshChecks = async () => {
+    setRefreshing(true);
+    setLastAction(null);
+    try {
+      await checkSiteById(id);
+      await fetchData();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleUpdate = async (field, value) => {
     setUpdating(true);
@@ -55,10 +82,21 @@ const SiteDetail = () => {
     }
   };
 
+  const formatDeployResponse = (res) => {
+    if (!res) return "";
+    const parts = [
+      res.message || res.status,
+      res.via ? `via ${res.via}` : null,
+      res.pipeline_url ? res.pipeline_url : null,
+    ].filter(Boolean);
+    return parts.join("\n");
+  };
+
   const handleDeploy = async () => {
     try {
       const res = await deploySite(id);
-      alert(res.message || "Deploy command sent");
+      setLastAction(formatDeployResponse(res));
+      alert(formatDeployResponse(res) || "Done");
     } catch (err) {
       alert(err.message);
     }
@@ -67,11 +105,27 @@ const SiteDetail = () => {
   const handleRollback = async () => {
     try {
       const res = await rollbackSite(id);
-      alert(res.message || "Rollback command sent");
+      setLastAction(formatDeployResponse(res));
+      alert(formatDeployResponse(res) || "Done");
     } catch (err) {
       alert(err.message);
     }
   };
+
+  const handleDelete = async () => {
+    if (!window.confirm("Delete this site permanently?")) return;
+    try {
+      await deleteSite(id);
+      navigate("/dashboard/sites");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const pingMs = fullStats?.ping?.avg != null ? fullStats.ping.avg : null;
+  const dnsOk = Boolean(fullStats?.dns?.ip);
+  const sslDays =
+    fullStats?.ssl?.days_left != null ? fullStats.ssl.days_left : null;
 
   if (loading) return <div style={{ color: "#fff" }}>Loading site...</div>;
   if (!site) return <div style={{ color: "#fff" }}>Site not found</div>;
@@ -83,11 +137,19 @@ const SiteDetail = () => {
           <h1 className="site-detail__title">{site.name}</h1>
           <div className="site-detail__domain">{site.url}</div>
         </div>
-        <div className="site-detail__status">
-          <span
-            className={`status-dot status-dot--${metrics?.is_up ? "online" : "offline"}`}
-          />
-          {metrics?.is_up ? "Online" : "Offline"}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="site-detail__status">
+            <span
+              className={`status-dot status-dot--${site.agent_online ? "online" : "offline"}`}
+            />
+            Agent {site.agent_online ? "live" : "offline"}
+          </div>
+          <div className="site-detail__status">
+            <span
+              className={`status-dot status-dot--${metrics?.is_up ? "online" : "offline"}`}
+            />
+            Probe {metrics?.is_up ? "UP" : "DOWN"}
+          </div>
         </div>
       </div>
 
@@ -95,6 +157,7 @@ const SiteDetail = () => {
         {TABS.map((tab) => (
           <button
             key={tab}
+            type="button"
             className={`tab ${activeTab === tab ? "tab--active" : ""}`}
             onClick={() => setActiveTab(tab)}
           >
@@ -105,6 +168,16 @@ const SiteDetail = () => {
 
       {activeTab === "Overview" && (
         <div>
+          <div style={{ marginBottom: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="btn-save"
+              disabled={refreshing}
+              onClick={handleRefreshChecks}
+            >
+              {refreshing ? "Checking…" : "Run HTTP check"}
+            </button>
+          </div>
           <div className="overview-grid">
             <div className="stat-card">
               <div className="stat-card__label">Uptime (24h)</div>
@@ -112,64 +185,138 @@ const SiteDetail = () => {
                 {metrics?.uptime_24h ?? 0}%
               </div>
               <div className="stat-card__sub">
-                {metrics?.is_up ? "Currently UP" : "Currently DOWN"}
+                {metrics?.is_up ? "Probe UP" : "Probe DOWN"}
               </div>
             </div>
             <div className="stat-card">
               <div className="stat-card__label">HTTP Status</div>
               <div className="stat-card__value">
-                {fullStats?.http?.status_code || "N/A"}
+                {fullStats?.http?.status_code ?? "N/A"}
               </div>
               <div className="stat-card__sub">
-                Response: {fullStats?.http?.response_time || 0}ms
+                Response:{" "}
+                {fullStats?.http?.response_time != null
+                  ? `${Math.round(Number(fullStats.http.response_time) * 1000)} ms`
+                  : "—"}
               </div>
             </div>
             <div className="stat-card">
-              <div className="stat-card__label">SSL Expiry</div>
+              <div className="stat-card__label">SSL</div>
               <div className="stat-card__value">
-                {fullStats?.ssl?.days_left ?? "N/A"} days
+                {sslDays != null ? `${sslDays} days` : "N/A"}
+              </div>
+              <div className="stat-card__sub">
+                {fullStats?.ssl?.valid === false
+                  ? "Invalid / HTTP only"
+                  : fullStats?.ssl?.expire_date || ""}
               </div>
             </div>
           </div>
+
+          {(site.git_repo_url || site.agent_token) && (
+            <div className="settings-section" style={{ marginTop: 20 }}>
+              <div className="settings-section__title">Connection</div>
+              {site.git_repo_url && (
+                <div className="settings-field">
+                  <label>Git repository</label>
+                  <input type="text" readOnly value={site.git_repo_url} />
+                </div>
+              )}
+              {site.agent_token && (
+                <div className="settings-field">
+                  <label>Agent token</label>
+                  <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={site.agent_token}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-save"
+                      onClick={async () => {
+                        const ok = await copyToClipboard(site.agent_token);
+                        alert(ok ? "Copied" : "Copy failed");
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === "Metrics" && (
         <div className="settings-section">
-          <div className="settings-section__title">
-            Resource & Network Metrics
+          <div
+            className="settings-section__title"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            Resource &amp; network
+            <button
+              type="button"
+              className="btn-save"
+              disabled={refreshing}
+              onClick={handleRefreshChecks}
+            >
+              {refreshing ? "Refreshing…" : "Refresh metrics"}
+            </button>
           </div>
+
+          {fullStats?.server?.server && (
+            <div className="settings-field" style={{ marginBottom: 16 }}>
+              <label>Server header</label>
+              <input type="text" readOnly value={fullStats.server.server} />
+            </div>
+          )}
+
           <div className="metrics-bar-row">
-            {fullStats?.ping && (
+            {pingMs != null && (
               <div className="metrics-bar-item">
-                <span className="metrics-bar-item__label">Ping</span>
+                <span className="metrics-bar-item__label">Ping avg</span>
                 <div className="metrics-bar-item__track">
                   <div
                     className="metrics-bar-item__fill"
                     style={{
-                      width: `${Math.min(100, fullStats.ping.latency_ms / 10)}%`,
+                      width: `${Math.min(100, (Number(pingMs) / 50) * 100)}%`,
                     }}
                   />
                 </div>
-                <span className="metrics-bar-item__val">
-                  {fullStats.ping.latency_ms} ms
-                </span>
+                <span className="metrics-bar-item__val">{pingMs} ms</span>
               </div>
             )}
-            {fullStats?.dns && (
+            {fullStats?.ping?.error && (
               <div className="metrics-bar-item">
-                <span className="metrics-bar-item__label">DNS</span>
-                <div className="metrics-bar-item__track">
-                  <div
-                    className="metrics-bar-item__fill"
-                    style={{ width: fullStats.dns.resolved ? 100 : 0 }}
-                  />
-                </div>
+                <span className="metrics-bar-item__label">Ping</span>
                 <span className="metrics-bar-item__val">
-                  {fullStats.dns.resolved ? "OK" : "Failed"}
+                  {fullStats.ping.error}
                 </span>
               </div>
             )}
+            <div className="metrics-bar-item">
+              <span className="metrics-bar-item__label">DNS</span>
+              <div className="metrics-bar-item__track">
+                <div
+                  className="metrics-bar-item__fill"
+                  style={{ width: dnsOk ? "100%" : "0%" }}
+                />
+              </div>
+              <span className="metrics-bar-item__val">
+                {dnsOk
+                  ? fullStats.dns.ip
+                  : fullStats?.dns?.error || "Unresolved"}
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -177,18 +324,36 @@ const SiteDetail = () => {
       {activeTab === "Deploy" && (
         <div>
           <div className="deploy-actions">
-            <button className="btn-deploy" onClick={handleDeploy}>
+            <button type="button" className="btn-deploy" onClick={handleDeploy}>
               Deploy
             </button>
-            <button className="btn-rollback" onClick={handleRollback}>
+            <button
+              type="button"
+              className="btn-rollback"
+              onClick={handleRollback}
+            >
               ↩ Rollback
             </button>
           </div>
+          {lastAction && (
+            <pre
+              className="deploy-log"
+              style={{
+                marginTop: 16,
+                whiteSpace: "pre-wrap",
+                fontSize: 12,
+                color: "#909090",
+              }}
+            >
+              {lastAction}
+            </pre>
+          )}
           <div className="deploy-log">
-            <div className="deploy-log__title">Deploy History</div>
+            <div className="deploy-log__title">Deploy</div>
             <div className="deploy-log__item">
               <span className="deploy-log__msg">
-                Use GitLab / Agent to track history
+                With a connected agent, commands are sent over WebSocket;
+                otherwise the API uses the configured GitLab pipeline.
               </span>
             </div>
           </div>
@@ -200,51 +365,55 @@ const SiteDetail = () => {
           <div className="settings-section">
             <div className="settings-section__title">General</div>
             <div className="settings-field">
-              <label>Site name</label>
+              <label htmlFor="site-name">Site name</label>
               <input
+                id="site-name"
                 type="text"
                 defaultValue={site.name}
-                onBlur={(e) => handleUpdate("name", e.target.value)}
+                key={`name-${site.name}`}
+                onBlur={(e) => {
+                  if (e.target.value !== site.name)
+                    handleUpdate("name", e.target.value);
+                }}
                 disabled={updating}
               />
             </div>
             <div className="settings-field">
-              <label>URL</label>
+              <label htmlFor="site-url">URL</label>
               <input
+                id="site-url"
                 type="text"
                 defaultValue={site.url}
-                onBlur={(e) => handleUpdate("url", e.target.value)}
+                key={`url-${site.url}`}
+                onBlur={(e) => {
+                  if (e.target.value !== site.url)
+                    handleUpdate("url", e.target.value);
+                }}
                 disabled={updating}
               />
             </div>
             <div className="settings-field">
-              <label>Active monitoring</label>
+              <label htmlFor="site-active">Active monitoring</label>
               <input
+                id="site-active"
                 type="checkbox"
-                checked={site.active}
+                checked={Boolean(site.active)}
                 onChange={(e) => handleUpdate("active", e.target.checked)}
                 disabled={updating}
               />
             </div>
             <button
+              type="button"
               className="btn-save"
               disabled={updating}
               style={{ marginTop: 12 }}
             >
-              Save (auto on blur)
+              Save (auto on blur / toggle)
             </button>
           </div>
           <div className="settings-section">
             <div className="settings-section__title">Danger Zone</div>
-            <button
-              className="btn-danger"
-              onClick={() => {
-                if (window.confirm("Delete this site permanently?")) {
-                  // реализуйте удаление отдельно или сделайте редирект на список
-                  window.location.href = `/dashboard/sites`;
-                }
-              }}
-            >
+            <button type="button" className="btn-danger" onClick={handleDelete}>
               Delete site
             </button>
           </div>

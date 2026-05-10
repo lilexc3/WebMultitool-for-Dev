@@ -80,3 +80,17 @@ export const getServerStats = () =>
   request("/api/server/stats").then((data) => data.data);
 export const healthCheck = () =>
   fetch(`${API_BASE}/health`).then((res) => res.json());
+
+export const getMe = () => request("/api/users/me").then((data) => data.data);
+export const updateMe = (updates) =>
+  request("/api/users/me", { method: "PUT", body: JSON.stringify(updates) });
+export const changePassword = (currentPassword, newPassword) =>
+  request("/api/users/me/password", {
+    method: "PUT",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+export const deleteAccount = () =>
+  request("/api/users/me", { method: "DELETE" });

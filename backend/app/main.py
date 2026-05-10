@@ -325,6 +325,85 @@ async def login_user(req: UserLoginRequest):
         "message": "Login successful"
     }
 
+class UserUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@app.get("/api/users/me")
+async def get_current_user_profile(user_id: int = Depends(get_current_user)):
+    user = fetch_one(
+        "SELECT id, email, name, created_at FROM users WHERE id = %s",
+        (user_id,),
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    sites = fetch_all("SELECT id, deploys_count FROM sites WHERE user_id = %s", (user_id,))
+
+    uptime_vals = []
+    for site in sites:
+        url_row = fetch_one("SELECT url FROM sites WHERE id = %s", (site["id"],))
+        if url_row:
+            q = f'avg_over_time(probe_success{{instance="{url_row["url"]}"}}[30d]) * 100'
+            try:
+                resp = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": q}, timeout=3)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data["data"]["result"]:
+                        uptime_vals.append(float(data["data"]["result"][0]["value"][1]))
+            except Exception:
+                pass
+
+    avg_uptime = round(sum(uptime_vals) / len(uptime_vals), 2) if uptime_vals else None
+
+    return {
+        "status": "ok",
+        "data": {
+            "id": int(user["id"]),
+            "email": user["email"],
+            "name": user.get("name"),
+            "created_at": user["created_at"].isoformat() if user["created_at"] else None,
+            "total_sites": len(sites),
+            "avg_uptime_30d": avg_uptime,
+        }
+    }
+
+@app.put("/api/users/me")
+async def update_current_user_profile(req: UserUpdateRequest, user_id: int = Depends(get_current_user)):
+    updates, params = [], []
+    if req.name is not None:
+        updates.append("name = %s")
+        params.append(req.name)
+    if req.email is not None:
+        existing = fetch_one("SELECT id FROM users WHERE email = %s AND id != %s", (req.email, user_id))
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        updates.append("email = %s")
+        params.append(req.email)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    params.append(user_id)
+    execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", tuple(params))
+    return {"status": "ok", "message": "Profile updated"}
+
+@app.put("/api/users/me/password")
+async def change_password(req: PasswordChangeRequest, user_id: int = Depends(get_current_user)):
+    user = fetch_one("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+    if not user or not verify_password(req.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    execute("UPDATE users SET password_hash = %s WHERE id = %s", (hash_password(req.new_password), user_id))
+    return {"status": "ok", "message": "Password changed"}
+
+@app.delete("/api/users/me")
+async def delete_current_user(user_id: int = Depends(get_current_user)):
+    execute("DELETE FROM sites WHERE user_id = %s", (user_id,))
+    execute("DELETE FROM users WHERE id = %s", (user_id,))
+    return {"status": "ok", "message": "Account deleted"}
+
 @app.get("/")
 async def root():
     return {"message": "DevOps WebApp API", "version": "1.0.0", "docs": "/docs"}

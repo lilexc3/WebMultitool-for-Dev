@@ -78,73 +78,107 @@ class DevOpsAgent:
             return {'error': str(e)}
     
     def execute_deploy(self, params: dict = None) -> dict:
-        """Выполнить деплой"""
+        """Деплой сервисов на этой ноде"""
         logger.info("🚀 Starting deployment...")
         
-        repo_url = params.get('repo_url', REPO_URL) if params else REPO_URL
-        branch = params.get('branch', BRANCH) if params else BRANCH
+        services = params.get('services', []) if params else []
         
+        if not services:
+            return {"status": "skipped", "message": "No services to deploy"}
+        
+        repo_url = services[0].get('repo_url')
         if not repo_url:
-            return {"status": "error", "message": "No repository URL configured"}
+            return {"status": "skipped", "message": "No repository configured"}
+        
+        repo_path = '/var/www/repo'
         
         try:
-            if not os.path.exists(SITE_PATH):
-                cmd = ['git', 'clone', '-b', branch, repo_url, SITE_PATH]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if not os.path.exists(repo_path):
+                result = subprocess.run(['git', 'clone', repo_url, repo_path],
+                                       capture_output=True, text=True, timeout=120)
                 if result.returncode != 0:
                     return {"status": "error", "message": f"Git clone failed: {result.stderr}"}
             else:
-                os.chdir(SITE_PATH)
-                cmd = ['git', 'pull', 'origin', branch]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                os.chdir(repo_path)
+                result = subprocess.run(['git', 'pull', 'origin', 'main'],
+                                       capture_output=True, text=True, timeout=60)
                 if result.returncode != 0:
                     return {"status": "error", "message": f"Git pull failed: {result.stderr}"}
             
-            if os.path.exists(os.path.join(SITE_PATH, 'docker-compose.yml')):
-                os.chdir(SITE_PATH)
-                cmd = ['docker', 'compose', 'up', '-d', '--build']
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-                if result.returncode != 0:
-                    return {"status": "error", "message": f"Docker compose failed: {result.stderr}"}
+            results = []
+            for service in services:
+                service_name = service.get('name', 'unknown')
+                deploy_path = service.get('deploy_path', '')
+                build_command = service.get('build_command', '')
+                
+                try:
+                    work_dir = os.path.join(repo_path, deploy_path) if deploy_path else repo_path
+                    os.chdir(work_dir)
+                    
+                    if build_command:
+                        subprocess.run(build_command, shell=True, capture_output=True, text=True, timeout=300)
+                    
+                    if service.get('docker_compose', True) and os.path.exists(os.path.join(work_dir, 'docker-compose.yml')):
+                        subprocess.run(['docker', 'compose', 'up', '-d', '--build'],
+                                      capture_output=True, text=True, timeout=180)
+                    
+                    results.append({"service": service_name, "status": "success"})
+                except Exception as e:
+                    results.append({"service": service_name, "status": "error", "error": str(e)})
             
-            return {
-                "status": "success",
-                "message": "Deployment completed",
-                "repo": repo_url,
-                "branch": branch
-            }
-        except subprocess.TimeoutExpired:
-            return {"status": "error", "message": "Deployment timeout"}
+            return {"status": "success", "results": results}
         except Exception as e:
             return {"status": "error", "message": str(e)}
     
     def execute_rollback(self, params: dict = None) -> dict:
-        """Выполнить откат"""
+        """Откат сервисов на этой ноде"""
         logger.info("⏪ Starting rollback...")
         
-        if not os.path.exists(SITE_PATH):
-            return {"status": "error", "message": "Site path not found"}
+        services = params.get('services', []) if params else []
+        
+        if not services:
+            return {"status": "skipped", "message": "No services to rollback"}
+        
+        repo_path = '/var/www/repo'
+        
+        if not os.path.exists(repo_path):
+            return {"status": "error", "message": "Repository path not found"}
         
         try:
-            os.chdir(SITE_PATH)
+            os.chdir(repo_path)
             
-            result = subprocess.run(['git', 'rev-list', '--count', 'HEAD'], 
+            result = subprocess.run(['git', 'rev-list', '--count', 'HEAD'],
                                    capture_output=True, text=True, timeout=10)
             commit_count = int(result.stdout.strip()) if result.stdout.strip() else 0
             
             if commit_count <= 1:
                 return {"status": "error", "message": "No previous commit to rollback to"}
             
-            cmd = ['git', 'reset', '--hard', 'HEAD~1']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-                return {"status": "error", "message": f"Git reset failed: {result.stderr}"}
+            subprocess.run(['git', 'reset', '--hard', 'HEAD~1'],
+                          capture_output=True, text=True, timeout=30)
             
-            if os.path.exists('docker-compose.yml'):
-                subprocess.run(['docker', 'compose', 'down'], capture_output=True, timeout=30)
-                subprocess.run(['docker', 'compose', 'up', '-d'], capture_output=True, timeout=120)
+            results = []
+            for service in services:
+                service_name = service.get('name', 'unknown')
+                deploy_path = service.get('deploy_path', '')
+                build_command = service.get('build_command', '')
+                
+                try:
+                    work_dir = os.path.join(repo_path, deploy_path) if deploy_path else repo_path
+                    os.chdir(work_dir)
+                    
+                    if build_command:
+                        subprocess.run(build_command, shell=True, capture_output=True, text=True, timeout=300)
+                    
+                    if os.path.exists(os.path.join(work_dir, 'docker-compose.yml')):
+                        subprocess.run(['docker', 'compose', 'down'], capture_output=True, timeout=30)
+                        subprocess.run(['docker', 'compose', 'up', '-d'], capture_output=True, timeout=120)
+                    
+                    results.append({"service": service_name, "status": "success"})
+                except Exception as e:
+                    results.append({"service": service_name, "status": "error", "error": str(e)})
             
-            return {"status": "success", "message": "Rollback completed"}
+            return {"status": "success", "results": results}
         except Exception as e:
             return {"status": "error", "message": str(e)}
     

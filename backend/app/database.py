@@ -110,6 +110,21 @@ CREATE TABLE IF NOT EXISTS node_services (
 );
 
 CREATE INDEX IF NOT EXISTS idx_node_services_node ON node_services(node_id);
+
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id BIGSERIAL PRIMARY KEY,
+    site_id BIGINT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    node_id BIGINT REFERENCES site_nodes(id) ON DELETE SET NULL,
+    user_id BIGINT REFERENCES users(id),
+    action TEXT NOT NULL,
+    node_name TEXT,
+    services_count INTEGER DEFAULT 0,
+    status TEXT NOT NULL,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_logs_site ON activity_logs(site_id, created_at DESC);
 """
 
 

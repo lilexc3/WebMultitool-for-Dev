@@ -282,6 +282,11 @@ def update_prometheus_targets():
     except Exception as e:
         logger.error(f"Failed to reload Prometheus: {e}")
 
+def log_deploy(site_id: int, user_id: int, action: str, node_name: str = None, services_count: int = 0, status: str = "success", error_message: str = None):
+    execute(
+        "INSERT INTO activity_logs (site_id, user_id, action, node_name, services_count, status, error_message) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (site_id, user_id, action, node_name, services_count, status, error_message)
+    )
 # ============== API ЭНДПОИНТЫ ==============
 
 @app.post("/api/auth/register")
@@ -448,11 +453,18 @@ async def create_node(site_id: int, req: NodeCreateRequest, user_id: int = Depen
         (site_id, req.name, req.vps_ip, agent_token)
     )
     
+    log_deploy(site_id, user_id, "node_added", req.name, 0, "success")
+    
     return {"status": "ok", "node_id": node_id, "agent_token": agent_token}
 
 @app.delete("/api/sites/{site_id}/nodes/{node_id}")
 async def delete_node(site_id: int, node_id: int, user_id: int = Depends(get_current_user)):
+    node = fetch_one("SELECT name FROM site_nodes WHERE id = %s", (node_id,))
     execute("DELETE FROM site_nodes WHERE id = %s AND site_id = %s", (node_id, site_id))
+    
+    if node:
+        log_deploy(site_id, user_id, "node_removed", node["name"], 0, "success")
+    
     return {"status": "ok"}
 
 @app.get("/api/sites/{site_id}/nodes/{node_id}/services")
@@ -466,12 +478,40 @@ async def create_service(site_id: int, node_id: int, req: ServiceCreateRequest, 
         "INSERT INTO node_services (node_id, name, repo_url, deploy_path, build_command, docker_compose) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
         (node_id, req.name, req.repo_url, req.deploy_path, req.build_command, req.docker_compose)
     )
+    
+    log_deploy(site_id, user_id, "service_added", req.name, 0, "success")
+    
     return {"status": "ok", "service_id": service_id}
 
 @app.delete("/api/sites/{site_id}/nodes/{node_id}/services/{service_id}")
 async def delete_service(site_id: int, node_id: int, service_id: int, user_id: int = Depends(get_current_user)):
+    service = fetch_one("SELECT name FROM node_services WHERE id = %s", (service_id,))
     execute("DELETE FROM node_services WHERE id = %s AND node_id = %s", (service_id, node_id))
+    
+    if service:
+        log_deploy(site_id, user_id, "service_removed", service["name"], 0, "success")
+    
     return {"status": "ok"}
+
+@app.get("/api/sites/{site_id}/nodes/summary")
+async def get_nodes_summary(site_id: int, user_id: int = Depends(get_current_user)):
+    """Сводка по всем нодам (CPU, RAM)"""
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+    
+    nodes = fetch_all("SELECT id, name, vps_ip, agent_connected FROM site_nodes WHERE site_id = %s", (site_id,))
+    
+    summary = []
+    for node in nodes:
+        summary.append({
+            "id": node["id"],
+            "name": node["name"],
+            "vps_ip": node.get("vps_ip"),
+            "agent_online": node["agent_connected"]
+        })
+    
+    return {"status": "ok", "data": summary}
 
 # ============== САЙТЫ - ФИКСИРОВАННЫЕ ПУТИ ==============
 
@@ -667,11 +707,13 @@ async def deploy_site(site_id: int, user_id: int = Depends(get_current_user)):
         
         if not services:
             results.append({"node": node["name"], "status": "skipped", "reason": "No services with repository"})
+            log_deploy(site_id, user_id, "deploy", node["name"], 0, "skipped", "No services with repository")
             continue
         
         token = node["agent_token"]
         if token not in [c.get("token") for c in manager.active_connections.values()]:
             results.append({"node": node["name"], "status": "offline"})
+            log_deploy(site_id, user_id, "deploy", node["name"], 0, "failed", "Agent offline")
             continue
         
         command = {
@@ -693,6 +735,7 @@ async def deploy_site(site_id: int, user_id: int = Depends(get_current_user)):
         }
         await manager.send_command(token, command)
         results.append({"node": node["name"], "status": "deployed", "services": len(services)})
+        log_deploy(site_id, user_id, "deploy", node["name"], len(services), "success")
     
     return {"status": "ok", "message": f"Deployed to {sum(1 for r in results if r['status'] == 'deployed')}/{len(nodes)} nodes", "results": results}
 
@@ -714,11 +757,13 @@ async def rollback_site(site_id: int, user_id: int = Depends(get_current_user)):
         
         if not services:
             results.append({"node": node["name"], "status": "skipped"})
+            log_deploy(site_id, user_id, "rollback", node["name"], 0, "skipped", "No services")
             continue
         
         token = node["agent_token"]
         if token not in [c.get("token") for c in manager.active_connections.values()]:
             results.append({"node": node["name"], "status": "offline"})
+            log_deploy(site_id, user_id, "rollback", node["name"], 0, "failed", "Agent offline")
             continue
         
         command = {
@@ -734,6 +779,7 @@ async def rollback_site(site_id: int, user_id: int = Depends(get_current_user)):
         }
         await manager.send_command(token, command)
         results.append({"node": node["name"], "status": "rolled_back"})
+        log_deploy(site_id, user_id, "rollback", node["name"], len(services), "success")
     
     return {"status": "ok", "message": f"Rolled back {sum(1 for r in results if r['status'] == 'rolled_back')}/{len(nodes)} nodes", "results": results}
 
@@ -779,6 +825,18 @@ async def get_site_metrics(site_id: int, user_id: int = Depends(get_current_user
         "is_up": is_up,
         "uptime_24h": round(uptime, 2)
     }
+
+@app.get("/api/sites/{site_id}/activity")
+async def get_deploy_history(site_id: int, limit: int = 30, user_id: int = Depends(get_current_user)):
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+    
+    logs = fetch_all(
+        "SELECT id, action, node_name, services_count, status, error_message, created_at FROM activity_logs WHERE site_id = %s ORDER BY created_at DESC LIMIT %s",
+        (site_id, limit)
+    )
+    return {"status": "ok", "data": logs}
 
 # ============== WEBSOCKET ДЛЯ АГЕНТОВ ==============
 

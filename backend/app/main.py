@@ -84,6 +84,17 @@ class SiteUpdateRequest(BaseModel):
     url: Optional[str] = None
     active: Optional[bool] = None
 
+class NodeCreateRequest(BaseModel):
+    name: str
+    vps_ip: Optional[str] = None
+
+class ServiceCreateRequest(BaseModel):
+    name: str
+    repo_url: Optional[str] = None
+    deploy_path: Optional[str] = None
+    build_command: Optional[str] = None
+    docker_compose: bool = True
+
 # ============== WebSocket Менеджер ==============
 class ConnectionManager:
     """Менеджер WebSocket соединений"""
@@ -96,6 +107,7 @@ class ConnectionManager:
         self.active_connections[token] = {
             "websocket": websocket,
             "site_id": site_id,
+            "token": token,
             "connected_at": datetime.now(),
             "last_seen": datetime.now()
         }
@@ -179,23 +191,20 @@ async def get_current_user(
     raise HTTPException(status_code=401, detail="Authentication required")
 
 def verify_agent_token(token: str) -> dict:
-    """Проверить токен агента и вернуть site_id"""
-    site = fetch_one(
-        """
-        SELECT id, user_id, url, name, git_repo_url
-        FROM sites
-        WHERE agent_token = %s
-        """,
-        (token,),
+    """Проверить токен агента и вернуть site_id (ищет только в site_nodes)"""
+    node = fetch_one(
+        """SELECT sn.id, sn.site_id, sn.name, s.url, s.user_id
+           FROM site_nodes sn JOIN sites s ON sn.site_id = s.id
+           WHERE sn.agent_token = %s""",
+        (token,)
     )
-
-    if site:
+    if node:
         return {
-            "site_id": int(site["id"]),
-            "user_id": int(site["user_id"]),
-            "url": site["url"],
-            "name": site["name"],
-            "git_repo_url": site.get("git_repo_url"),
+            "site_id": node["site_id"],
+            "user_id": node["user_id"],
+            "url": node["url"],
+            "name": node["name"],
+            "node_id": node["id"]
         }
     return None
 
@@ -205,7 +214,7 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
         sites = fetch_all(
             """
             SELECT id, user_id, url, name, active, created_at,
-                   last_status, last_check, agent_connected, git_repo_url, agent_token
+                   last_status, last_check, git_repo_url
             FROM sites
             WHERE user_id = %s
             ORDER BY created_at DESC
@@ -216,7 +225,7 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
         sites = fetch_all(
             """
             SELECT id, user_id, url, name, active, created_at,
-                   last_status, last_check, agent_connected, git_repo_url, agent_token
+                   last_status, last_check, git_repo_url
             FROM sites
             ORDER BY created_at DESC
             """
@@ -233,9 +242,7 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
             "created_at": site["created_at"],
             "last_status": site.get("last_status"),
             "last_check": site.get("last_check"),
-            "agent_connected": bool(site["agent_connected"]),
             "git_repo_url": site.get("git_repo_url"),
-            "agent_token": site.get("agent_token"),
         })
     return result
 
@@ -418,6 +425,54 @@ async def server_stats():
     stats = get_server_stats()
     return {"status": "ok", "data": stats}
 
+# ============== Ноды и сервисы внутри нод ==============
+
+@app.get("/api/sites/{site_id}/nodes")
+async def get_nodes(site_id: int, user_id: int = Depends(get_current_user)):
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+    
+    nodes = fetch_all("SELECT * FROM site_nodes WHERE site_id = %s", (site_id,))
+    return {"status": "ok", "data": nodes}
+
+@app.post("/api/sites/{site_id}/nodes")
+async def create_node(site_id: int, req: NodeCreateRequest, user_id: int = Depends(get_current_user)):
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+    
+    agent_token = secrets.token_urlsafe(32)
+    node_id = execute_returning_id(
+        "INSERT INTO site_nodes (site_id, name, vps_ip, agent_token) VALUES (%s, %s, %s, %s) RETURNING id",
+        (site_id, req.name, req.vps_ip, agent_token)
+    )
+    
+    return {"status": "ok", "node_id": node_id, "agent_token": agent_token}
+
+@app.delete("/api/sites/{site_id}/nodes/{node_id}")
+async def delete_node(site_id: int, node_id: int, user_id: int = Depends(get_current_user)):
+    execute("DELETE FROM site_nodes WHERE id = %s AND site_id = %s", (node_id, site_id))
+    return {"status": "ok"}
+
+@app.get("/api/sites/{site_id}/nodes/{node_id}/services")
+async def get_services(site_id: int, node_id: int, user_id: int = Depends(get_current_user)):
+    services = fetch_all("SELECT * FROM node_services WHERE node_id = %s", (node_id,))
+    return {"status": "ok", "data": services}
+
+@app.post("/api/sites/{site_id}/nodes/{node_id}/services")
+async def create_service(site_id: int, node_id: int, req: ServiceCreateRequest, user_id: int = Depends(get_current_user)):
+    service_id = execute_returning_id(
+        "INSERT INTO node_services (node_id, name, repo_url, deploy_path, build_command, docker_compose) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (node_id, req.name, req.repo_url, req.deploy_path, req.build_command, req.docker_compose)
+    )
+    return {"status": "ok", "service_id": service_id}
+
+@app.delete("/api/sites/{site_id}/nodes/{node_id}/services/{service_id}")
+async def delete_service(site_id: int, node_id: int, service_id: int, user_id: int = Depends(get_current_user)):
+    execute("DELETE FROM node_services WHERE id = %s AND node_id = %s", (service_id, node_id))
+    return {"status": "ok"}
+
 # ============== САЙТЫ - ФИКСИРОВАННЫЕ ПУТИ ==============
 
 @app.get("/api/sites/online")
@@ -447,37 +502,37 @@ async def get_sites(user_id: int = Depends(get_current_user)):
 
 @app.post("/api/sites")
 async def create_site(req: SiteCreateRequest, user_id: int = Depends(get_current_user)):
-    """Создать новый сайт"""
-    # Валидация URL
+    """Создать новый сайт с автоматической нодой"""
     if not validate_url(req.url):
         raise HTTPException(status_code=400, detail="Invalid URL format. Must start with http:// or https://")
     
-    agent_token = secrets.token_urlsafe(32)
-
     try:
         site_id = execute_returning_id(
             """
-            INSERT INTO sites (user_id, url, name, git_repo_url, agent_token)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO sites (user_id, url, name, git_repo_url)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
             """,
-            (user_id, req.url, req.name, req.git_repo_url, agent_token),
+            (user_id, req.url, req.name, req.git_repo_url),
         )
     except Exception as e:
-        logger.error(f"Failed to create site: {e}")  # ← ДОБАВИТЬ ЭТУ СТРОКУ
+        logger.error(f"Failed to create site: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to create site: {str(e)}")
+    
+    # Автоматически создаём ноду по умолчанию
+    node_token = secrets.token_urlsafe(32)
+    execute(
+        "INSERT INTO site_nodes (site_id, name, agent_token) VALUES (%s, %s, %s)",
+        (site_id, req.name, node_token)
+    )
     
     update_prometheus_targets()
     
-    agent_command = f"docker run -d --restart always --name devops-agent -e AGENT_TOKEN={agent_token} -e API_URL=ws://host.docker.internal:8000/ws/agent -v /var/run/docker.sock:/var/run/docker.sock lilexc3/webmultitool-agent:latest"
-    
     return {
-        "status": "ok",
-        "site_id": site_id,
-        "agent_token": agent_token,
-        "agent_command": agent_command,
-        "message": "Site created. Run the agent command on your server to connect."
-    }
+    "status": "ok",
+    "site_id": site_id,
+    "message": "Site created. Add nodes to configure deployment."
+}
 
 # ============== САЙТЫ - С ПАРАМЕТРОМ ==============
 
@@ -593,60 +648,94 @@ async def get_full_stats(site_id: int, user_id: int = Depends(get_current_user))
 
 @app.post("/api/sites/{site_id}/deploy")
 async def deploy_site(site_id: int, user_id: int = Depends(get_current_user)):
-    """Запустить деплой (через агента или GitLab API)"""
+    """Деплой на все ноды сайта (с сервисами)"""
     site = get_site_info(site_id)
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-    
-    if site.get("user_id") != user_id:
+    if not site or site.get("user_id") != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    if manager.is_site_online(site_id):
+    nodes = fetch_all("SELECT id, name, agent_token FROM site_nodes WHERE site_id = %s", (site_id,))
+    
+    if not nodes:
+        return {"status": "error", "message": "No nodes configured. Add a node first."}
+    
+    results = []
+    for node in nodes:
+        services = fetch_all(
+            "SELECT * FROM node_services WHERE node_id = %s AND repo_url IS NOT NULL",
+            (node["id"],)
+        )
+        
+        if not services:
+            results.append({"node": node["name"], "status": "skipped", "reason": "No services with repository"})
+            continue
+        
+        token = node["agent_token"]
+        if token not in [c.get("token") for c in manager.active_connections.values()]:
+            results.append({"node": node["name"], "status": "offline"})
+            continue
+        
         command = {
             "type": "command",
             "action": "deploy",
-            "request_id": f"deploy_{site_id}_{datetime.now().timestamp()}",
+            "request_id": f"deploy_{node['id']}_{datetime.now().timestamp()}",
             "params": {
-                "repo_url": site.get("git_repo_url", ""),
-                "branch": "main"
+                "services": [
+                    {
+                        "name": s["name"],
+                        "repo_url": s["repo_url"],
+                        "deploy_path": s["deploy_path"],
+                        "build_command": s["build_command"],
+                        "docker_compose": s["docker_compose"]
+                    }
+                    for s in services
+                ]
             }
         }
-        success = await manager.send_command_by_site_id(site_id, command)
-        if success:
-            return {"status": "sent", "message": "Deploy command sent to agent", "via": "agent"}
-        else:
-            return {"status": "error", "message": "Failed to send command to agent"}
-    else:
-        result = trigger_deploy(site_id)
-        result["via"] = "gitlab"
-        return result
+        await manager.send_command(token, command)
+        results.append({"node": node["name"], "status": "deployed", "services": len(services)})
+    
+    return {"status": "ok", "message": f"Deployed to {sum(1 for r in results if r['status'] == 'deployed')}/{len(nodes)} nodes", "results": results}
 
 @app.post("/api/sites/{site_id}/rollback")
 async def rollback_site(site_id: int, user_id: int = Depends(get_current_user)):
-    """Запустить откат (через агента или GitLab API)"""
+    """Откат на всех нодах сайта"""
     site = get_site_info(site_id)
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-    
-    if site.get("user_id") != user_id:
+    if not site or site.get("user_id") != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    if manager.is_site_online(site_id):
+    nodes = fetch_all("SELECT id, name, agent_token FROM site_nodes WHERE site_id = %s", (site_id,))
+    
+    if not nodes:
+        return {"status": "error", "message": "No nodes configured. Add a node first."}
+    
+    results = []
+    for node in nodes:
+        services = fetch_all("SELECT * FROM node_services WHERE node_id = %s AND repo_url IS NOT NULL", (node["id"],))
+        
+        if not services:
+            results.append({"node": node["name"], "status": "skipped"})
+            continue
+        
+        token = node["agent_token"]
+        if token not in [c.get("token") for c in manager.active_connections.values()]:
+            results.append({"node": node["name"], "status": "offline"})
+            continue
+        
         command = {
             "type": "command",
             "action": "rollback",
-            "request_id": f"rollback_{site_id}_{datetime.now().timestamp()}",
-            "params": {}
+            "request_id": f"rollback_{node['id']}_{datetime.now().timestamp()}",
+            "params": {
+                "services": [
+                    {"name": s["name"], "repo_url": s["repo_url"], "deploy_path": s["deploy_path"], "build_command": s["build_command"]}
+                    for s in services
+                ]
+            }
         }
-        success = await manager.send_command_by_site_id(site_id, command)
-        if success:
-            return {"status": "sent", "message": "Rollback command sent to agent", "via": "agent"}
-        else:
-            return {"status": "error", "message": "Failed to send command to agent"}
-    else:
-        result = trigger_rollback(site_id)
-        result["via"] = "gitlab"
-        return result
+        await manager.send_command(token, command)
+        results.append({"node": node["name"], "status": "rolled_back"})
+    
+    return {"status": "ok", "message": f"Rolled back {sum(1 for r in results if r['status'] == 'rolled_back')}/{len(nodes)} nodes", "results": results}
 
 @app.get("/api/sites/{site_id}/metrics")
 async def get_site_metrics(site_id: int, user_id: int = Depends(get_current_user)):
@@ -706,8 +795,7 @@ async def websocket_agent_endpoint(websocket: WebSocket, token: str):
     
     await manager.connect(websocket, token, site_id)
 
-    execute("UPDATE sites SET agent_connected = TRUE WHERE id = %s", (site_id,))
-    
+    execute("UPDATE site_nodes SET agent_connected = TRUE WHERE agent_token = %s", (token,))    
     try:
         await websocket.send_json({
             "type": "welcome",
@@ -736,7 +824,7 @@ async def websocket_agent_endpoint(websocket: WebSocket, token: str):
         logger.error(f"WebSocket error: {e}")
     finally:
         manager.disconnect(token)
-        execute("UPDATE sites SET agent_connected = FALSE WHERE id = %s", (site_id,))
+        execute("UPDATE site_nodes SET agent_connected = FALSE WHERE agent_token = %s", (token,))
 
 # ============== ЗАПУСК ==============
 if __name__ == "__main__":

@@ -71,9 +71,7 @@ CREATE TABLE IF NOT EXISTS sites (
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_status INTEGER,
-  last_check TIMESTAMPTZ,
-  agent_token TEXT UNIQUE,
-  agent_connected BOOLEAN NOT NULL DEFAULT FALSE
+  last_check TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_sites_user_created ON sites(user_id, created_at DESC);
@@ -86,6 +84,32 @@ CREATE TABLE IF NOT EXISTS agents (
   connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen TIMESTAMPTZ
 );
+
+CREATE TABLE IF NOT EXISTS site_nodes (
+    id BIGSERIAL PRIMARY KEY,
+    site_id BIGINT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    agent_token TEXT UNIQUE NOT NULL,
+    vps_ip TEXT,
+    agent_connected BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_nodes_site ON site_nodes(site_id);
+CREATE INDEX IF NOT EXISTS idx_site_nodes_token ON site_nodes(agent_token);
+
+CREATE TABLE IF NOT EXISTS node_services (
+    id BIGSERIAL PRIMARY KEY,
+    node_id BIGINT NOT NULL REFERENCES site_nodes(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    repo_url TEXT,
+    deploy_path TEXT,
+    build_command TEXT,
+    docker_compose BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_node_services_node ON node_services(node_id);
 """
 
 

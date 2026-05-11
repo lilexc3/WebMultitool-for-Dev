@@ -251,75 +251,109 @@ const SiteDetail = () => {
       )}
 
       {activeTab === "Metrics" && (
-        <div className="settings-section">
-          <div
-            className="settings-section__title"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 8,
-            }}
-          >
-            Resource &amp; network
-            <button
-              type="button"
-              className="btn-save"
-              disabled={refreshing}
-              onClick={handleRefreshChecks}
-            >
-              {refreshing ? "Refreshing…" : "Refresh metrics"}
-            </button>
-          </div>
+  <div>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+        marginBottom: 16,
+      }}
+    >
+      <h3 style={{ margin: 0 }}>Performance & Resource Metrics</h3>
+      <button
+        type="button"
+        className="btn-save"
+        disabled={refreshing}
+        onClick={handleRefreshChecks}
+      >
+        {refreshing ? "Refreshing…" : "Refresh metrics"}
+      </button>
+    </div>
 
-          {fullStats?.server?.server && (
-            <div className="settings-field" style={{ marginBottom: 16 }}>
-              <label>Server header</label>
-              <input type="text" readOnly value={fullStats.server.server} />
-            </div>
-          )}
+    {/* Grafana iframe — графики */}
+    <iframe
+      src={`http://localhost:3100/d-solo/client-site/site-overview?orgId=1&refresh=30s&from=now-24h&to=now&var-site_url=${encodeURIComponent(site.url)}&panelId=2`}
+      width="100%"
+      height="400"
+      frameBorder="0"
+      style={{ borderRadius: 8, marginBottom: 20 }}
+    />
 
-          <div className="metrics-bar-row">
-            {pingMs != null && (
-              <div className="metrics-bar-item">
-                <span className="metrics-bar-item__label">Ping avg</span>
-                <div className="metrics-bar-item__track">
-                  <div
-                    className="metrics-bar-item__fill"
-                    style={{
-                      width: `${Math.min(100, (Number(pingMs) / 50) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <span className="metrics-bar-item__val">{pingMs} ms</span>
-              </div>
-            )}
-            {fullStats?.ping?.error && (
-              <div className="metrics-bar-item">
-                <span className="metrics-bar-item__label">Ping</span>
-                <span className="metrics-bar-item__val">
-                  {fullStats.ping.error}
-                </span>
-              </div>
-            )}
-            <div className="metrics-bar-item">
-              <span className="metrics-bar-item__label">DNS</span>
-              <div className="metrics-bar-item__track">
-                <div
-                  className="metrics-bar-item__fill"
-                  style={{ width: dnsOk ? "100%" : "0%" }}
-                />
-              </div>
-              <span className="metrics-bar-item__val">
-                {dnsOk
-                  ? fullStats.dns.ip
-                  : fullStats?.dns?.error || "Unresolved"}
-              </span>
-            </div>
+    {/* Server header */}
+    {fullStats?.server?.server && (
+      <div className="settings-field" style={{ marginBottom: 16 }}>
+        <label>Server header</label>
+        <input type="text" readOnly value={fullStats.server.server} />
+      </div>
+    )}
+
+    {/* Ping + DNS */}
+    <div className="metrics-bar-row">
+      {pingMs != null && (
+        <div className="metrics-bar-item">
+          <span className="metrics-bar-item__label">Ping avg</span>
+          <div className="metrics-bar-item__track">
+            <div
+              className="metrics-bar-item__fill"
+              style={{
+                width: `${Math.min(100, (Number(pingMs) / 50) * 100)}%`,
+              }}
+            />
           </div>
+          <span className="metrics-bar-item__val">{pingMs} ms</span>
         </div>
       )}
+      {fullStats?.ping?.error && (
+        <div className="metrics-bar-item">
+          <span className="metrics-bar-item__label">Ping</span>
+          <span className="metrics-bar-item__val">{fullStats.ping.error}</span>
+        </div>
+      )}
+      <div className="metrics-bar-item">
+        <span className="metrics-bar-item__label">DNS</span>
+        <div className="metrics-bar-item__track">
+          <div
+            className="metrics-bar-item__fill"
+            style={{ width: dnsOk ? "100%" : "0%" }}
+          />
+        </div>
+        <span className="metrics-bar-item__val">
+          {dnsOk ? fullStats.dns.ip : fullStats?.dns?.error || "Unresolved"}
+        </span>
+      </div>
+    </div>
+
+    {/* Grafana — CPU + RAM + Disk */}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
+      <iframe
+        src={`http://localhost:3100/d-solo/client-site/site-overview?orgId=1&refresh=30s&from=now-24h&to=now&var-site_url=${encodeURIComponent(site.url)}&panelId=3`}
+        width="100%"
+        height="250"
+        frameBorder="0"
+        style={{ borderRadius: 8 }}
+      />
+      <iframe
+        src={`http://localhost:3100/d-solo/client-site/site-overview?orgId=1&refresh=30s&from=now-24h&to=now&var-site_url=${encodeURIComponent(site.url)}&panelId=4`}
+        width="100%"
+        height="250"
+        frameBorder="0"
+        style={{ borderRadius: 8 }}
+      />
+    </div>
+    <div style={{ marginTop: 16 }}>
+      <iframe
+        src={`http://localhost:3100/d-solo/client-site/site-overview?orgId=1&refresh=30s&from=now-24h&to=now&var-site_url=${encodeURIComponent(site.url)}&panelId=5`}
+        width="100%"
+        height="250"
+        frameBorder="0"
+        style={{ borderRadius: 8 }}
+      />
+    </div>
+  </div>
+)}
 
       {activeTab === "Deploy" && (
         <div>

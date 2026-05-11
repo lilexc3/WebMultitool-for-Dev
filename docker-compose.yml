@@ -71,9 +71,9 @@ services:
       - ./monitoring/prometheus/file_sd:/etc/prometheus/file_sd
       - prometheus_data:/prometheus
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-lifecycle"
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
     networks:
       - devops-network
     depends_on:
@@ -113,6 +113,26 @@ services:
     networks:
       - devops-network
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "3100:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - devops-network
+  
+
+
 volumes:
   prometheus_data:
   postgres_data:
+  grafana_data:

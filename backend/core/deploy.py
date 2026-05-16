@@ -60,10 +60,10 @@ def trigger_rollback(site_id: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 def get_site_info(site_id: int) -> dict:
-    """Получить информацию о сайте по ID"""
     site = fetch_one(
         """
-        SELECT id, user_id, url, name, active, git_repo_url, agent_token
+        SELECT id, user_id, url, name, active, git_repo_url, agent_token,
+               dashboard_mode, custom_dashboard_url
         FROM sites
         WHERE id = %s
         """,
@@ -79,5 +79,7 @@ def get_site_info(site_id: int) -> dict:
             "active": bool(site["active"]),
             "git_repo_url": site.get("git_repo_url"),
             "agent_token": site.get("agent_token"),
+            "dashboard_mode": site.get("dashboard_mode", "standard"),
+            "custom_dashboard_url": site.get("custom_dashboard_url"),
         }
     return None

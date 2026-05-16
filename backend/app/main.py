@@ -83,6 +83,8 @@ class SiteUpdateRequest(BaseModel):
     name: Optional[str] = None
     url: Optional[str] = None
     active: Optional[bool] = None
+    dashboard_mode: Optional[str] = None
+    custom_dashboard_url: Optional[str] = None
 
 class NodeCreateRequest(BaseModel):
     name: str
@@ -615,6 +617,12 @@ async def update_site(site_id: int, req: SiteUpdateRequest, user_id: int = Depen
     if req.active is not None:
         updates.append("active = %s")
         params.append(bool(req.active))
+    if req.dashboard_mode is not None:
+        updates.append("dashboard_mode = %s")
+        params.append(req.dashboard_mode)
+    if req.custom_dashboard_url is not None:
+        updates.append("custom_dashboard_url = %s")
+        params.append(req.custom_dashboard_url)
     
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

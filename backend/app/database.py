@@ -72,8 +72,10 @@ CREATE TABLE IF NOT EXISTS sites (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_status INTEGER,
   last_check TIMESTAMPTZ,
-  dashboard_mode TEXT NOT NULL DEFAULT 'standard',
-  custom_dashboard_url TEXT
+  server_dashboard_mode TEXT NOT NULL DEFAULT 'standard',
+  server_dashboard_url TEXT,
+  site_dashboard_mode TEXT NOT NULL DEFAULT 'standard',
+  site_dashboard_url TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sites_user_created ON sites(user_id, created_at DESC);

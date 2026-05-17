@@ -31,8 +31,10 @@ class SiteUpdateRequest(BaseModel):
     name: Optional[str] = None
     url: Optional[str] = None
     active: Optional[bool] = None
-    dashboard_mode: Optional[str] = None
-    custom_dashboard_url: Optional[str] = None
+    server_dashboard_mode: Optional[str] = None
+    server_dashboard_url: Optional[str] = None
+    site_dashboard_mode: Optional[str] = None
+    site_dashboard_url: Optional[str] = None
 
 class SiteCheckRequest(BaseModel):
     url: str

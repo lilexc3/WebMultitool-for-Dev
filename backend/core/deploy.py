@@ -14,7 +14,8 @@ def get_site_info(site_id: int) -> dict:
     site = fetch_one(
         """
         SELECT id, user_id, url, name, active, git_repo_url,
-               dashboard_mode, custom_dashboard_url
+               server_dashboard_mode, server_dashboard_url,
+               site_dashboard_mode, site_dashboard_url
         FROM sites
         WHERE id = %s
         """,
@@ -29,7 +30,9 @@ def get_site_info(site_id: int) -> dict:
             "name": site["name"],
             "active": bool(site["active"]),
             "git_repo_url": site.get("git_repo_url"),
-            "dashboard_mode": site.get("dashboard_mode", "standard"),
-            "custom_dashboard_url": site.get("custom_dashboard_url"),
+            "server_dashboard_mode": site.get("server_dashboard_mode", "standard"),
+            "server_dashboard_url": site.get("server_dashboard_url"),
+            "site_dashboard_mode": site.get("site_dashboard_mode", "standard"),
+            "site_dashboard_url": site.get("site_dashboard_url"),
         }
     return None

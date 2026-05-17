@@ -138,7 +138,7 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
         sites = fetch_all(
             """
             SELECT id, user_id, url, name, active, created_at,
-                   last_status, last_check, git_repo_url, dashboard_mode, custom_dashboard_url
+                   last_status, last_check, git_repo_url, server_dashboard_mode, server_dashboard_url, site_dashboard_mode, site_dashboard_url
             FROM sites
             WHERE user_id = %s
             ORDER BY created_at DESC
@@ -167,8 +167,10 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
             "last_status": site.get("last_status"),
             "last_check": site.get("last_check"),
             "git_repo_url": site.get("git_repo_url"),
-            "dashboard_mode": site.get("dashboard_mode", "standard"),
-            "custom_dashboard_url": site.get("custom_dashboard_url"),
+            "server_dashboard_mode": site.get("server_dashboard_mode", "standard"),
+            "server_dashboard_url": site.get("server_dashboard_url"),
+            "site_dashboard_mode": site.get("site_dashboard_mode", "standard"),
+            "site_dashboard_url": site.get("site_dashboard_url"),
         })
     return result
 
@@ -609,12 +611,18 @@ async def update_site(site_id: int, req: SiteUpdateRequest, user_id: int = Depen
     if req.active is not None:
         updates.append("active = %s")
         params.append(bool(req.active))
-    if req.dashboard_mode is not None:
-        updates.append("dashboard_mode = %s")
-        params.append(req.dashboard_mode)
-    if req.custom_dashboard_url is not None:
-        updates.append("custom_dashboard_url = %s")
-        params.append(req.custom_dashboard_url)
+    if req.server_dashboard_mode is not None:
+        updates.append("server_dashboard_mode = %s")
+        params.append(req.server_dashboard_mode)
+    if req.server_dashboard_url is not None:
+        updates.append("server_dashboard_url = %s")
+        params.append(req.server_dashboard_url)
+    if req.site_dashboard_mode is not None:
+        updates.append("site_dashboard_mode = %s")
+        params.append(req.site_dashboard_mode)
+    if req.site_dashboard_url is not None:
+        updates.append("site_dashboard_url = %s")
+        params.append(req.site_dashboard_url)
     
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

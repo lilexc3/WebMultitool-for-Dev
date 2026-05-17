@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS node_services (
     repo_url TEXT,
     deploy_path TEXT,
     build_command TEXT,
+    restart_command TEXT,
     docker_compose BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

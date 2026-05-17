@@ -3,7 +3,6 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Head
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
-from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from jose import jwt
@@ -16,18 +15,30 @@ import requests
 import secrets
 import json
 import re
+from app.websocket import manager
 
 from app.database import init_database, fetch_one, fetch_all, execute, execute_returning_id
 
 # Добавляем путь к core
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.models import (
+    UserRegisterRequest,
+    UserLoginRequest,
+    UserUpdateRequest,
+    PasswordChangeRequest,
+    TokenResponse,
+    SiteCreateRequest,
+    SiteUpdateRequest,
+    SiteCheckRequest,
+    NodeCreateRequest,
+    ServiceCreateRequest
+)
+
 from core import (
     check_site_health,
     get_site_full_stats,
     get_server_stats,
-    trigger_deploy,
-    trigger_rollback,
     get_site_info
 )
 
@@ -56,95 +67,6 @@ ALGORITHM = "HS256"
 
 # Пути
 PROMETHEUS_URL = os.getenv('PROMETHEUS_URL', 'http://localhost:9090')
-
-# ============== МОДЕЛИ ДАННЫХ ==============
-class UserRegisterRequest(BaseModel):
-    email: str
-    password: str
-    name: Optional[str] = None
-
-class UserLoginRequest(BaseModel):
-    email: str
-    password: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user_id: int
-class SiteCheckRequest(BaseModel):
-    url: str
-
-class SiteCreateRequest(BaseModel):
-    url: str
-    name: str
-    git_repo_url: Optional[str] = None
-
-class SiteUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    url: Optional[str] = None
-    active: Optional[bool] = None
-    dashboard_mode: Optional[str] = None
-    custom_dashboard_url: Optional[str] = None
-
-class NodeCreateRequest(BaseModel):
-    name: str
-    vps_ip: Optional[str] = None
-
-class ServiceCreateRequest(BaseModel):
-    name: str
-    repo_url: Optional[str] = None
-    deploy_path: Optional[str] = None
-    build_command: Optional[str] = None
-    docker_compose: bool = True
-
-# ============== WebSocket Менеджер ==============
-class ConnectionManager:
-    """Менеджер WebSocket соединений"""
-    
-    def __init__(self):
-        self.active_connections: dict = {}
-    
-    async def connect(self, websocket: WebSocket, token: str, site_id: int):
-        await websocket.accept()
-        self.active_connections[token] = {
-            "websocket": websocket,
-            "site_id": site_id,
-            "token": token,
-            "connected_at": datetime.now(),
-            "last_seen": datetime.now()
-        }
-        logger.info(f"Agent connected: site_id={site_id}")
-    
-    def disconnect(self, token: str):
-        if token in self.active_connections:
-            site_id = self.active_connections[token]["site_id"]
-            del self.active_connections[token]
-            logger.info(f"Agent disconnected: site_id={site_id}")
-    
-    async def send_command(self, token: str, command: dict) -> bool:
-        if token not in self.active_connections:
-            return False
-        try:
-            websocket = self.active_connections[token]["websocket"]
-            await websocket.send_json(command)
-            self.active_connections[token]["last_seen"] = datetime.now()
-            return True
-        except:
-            return False
-    
-    async def send_command_by_site_id(self, site_id: int, command: dict) -> bool:
-        for token, conn in self.active_connections.items():
-            if conn["site_id"] == site_id:
-                return await self.send_command(token, command)
-        return False
-    
-    def get_online_sites(self) -> list:
-        return [conn["site_id"] for conn in self.active_connections.values()]
-    
-    def is_site_online(self, site_id: int) -> bool:
-        return site_id in self.get_online_sites()
-
-manager = ConnectionManager()
 
 # ============== Вспомогательные функции ==============
 
@@ -216,7 +138,7 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
         sites = fetch_all(
             """
             SELECT id, user_id, url, name, active, created_at,
-                   last_status, last_check, git_repo_url
+                   last_status, last_check, git_repo_url, dashboard_mode, custom_dashboard_url
             FROM sites
             WHERE user_id = %s
             ORDER BY created_at DESC
@@ -245,6 +167,8 @@ def get_all_sites_from_db(user_id: Optional[int] = None) -> List[dict]:
             "last_status": site.get("last_status"),
             "last_check": site.get("last_check"),
             "git_repo_url": site.get("git_repo_url"),
+            "dashboard_mode": site.get("dashboard_mode", "standard"),
+            "custom_dashboard_url": site.get("custom_dashboard_url"),
         })
     return result
 
@@ -338,14 +262,6 @@ async def login_user(req: UserLoginRequest):
         "token_type": "bearer",
         "message": "Login successful"
     }
-
-class UserUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-
-class PasswordChangeRequest(BaseModel):
-    current_password: str
-    new_password: str
 
 @app.get("/api/users/me")
 async def get_current_user_profile(user_id: int = Depends(get_current_user)):
@@ -477,13 +393,52 @@ async def get_services(site_id: int, node_id: int, user_id: int = Depends(get_cu
 @app.post("/api/sites/{site_id}/nodes/{node_id}/services")
 async def create_service(site_id: int, node_id: int, req: ServiceCreateRequest, user_id: int = Depends(get_current_user)):
     service_id = execute_returning_id(
-        "INSERT INTO node_services (node_id, name, repo_url, deploy_path, build_command, docker_compose) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-        (node_id, req.name, req.repo_url, req.deploy_path, req.build_command, req.docker_compose)
+        "INSERT INTO node_services (node_id, name, repo_url, deploy_path, build_command, restart_command, docker_compose) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (node_id, req.name, req.repo_url, req.deploy_path, req.build_command, req.restart_command, req.docker_compose)
     )
     
     log_deploy(site_id, user_id, "service_added", req.name, 0, "success")
     
     return {"status": "ok", "service_id": service_id}
+
+@app.put("/api/sites/{site_id}/nodes/{node_id}/services/{service_id}")
+async def update_service(site_id: int, node_id: int, service_id: int, req: ServiceCreateRequest, user_id: int = Depends(get_current_user)):
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+
+    updates = []
+    params = []
+
+    if req.name is not None:
+        updates.append("name = %s")
+        params.append(req.name)
+    if req.repo_url is not None:
+        updates.append("repo_url = %s")
+        params.append(req.repo_url)
+    if req.deploy_path is not None:
+        updates.append("deploy_path = %s")
+        params.append(req.deploy_path)
+    if req.build_command is not None:
+        updates.append("build_command = %s")
+        params.append(req.build_command)
+    if req.restart_command is not None:
+        updates.append("restart_command = %s")
+        params.append(req.restart_command)
+    if req.docker_compose is not None:
+        updates.append("docker_compose = %s")
+        params.append(req.docker_compose)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    params.append(service_id)
+    query = f"UPDATE node_services SET {', '.join(updates)} WHERE id = %s"
+    execute(query, tuple(params))
+
+    log_deploy(site_id, user_id, "service_updated", req.name or "service", 0, "success")
+
+    return {"status": "ok", "message": "Service updated"}
 
 @app.delete("/api/sites/{site_id}/nodes/{node_id}/services/{service_id}")
 async def delete_service(site_id: int, node_id: int, service_id: int, user_id: int = Depends(get_current_user)):
@@ -494,6 +449,43 @@ async def delete_service(site_id: int, node_id: int, service_id: int, user_id: i
         log_deploy(site_id, user_id, "service_removed", service["name"], 0, "success")
     
     return {"status": "ok"}
+
+@app.post("/api/sites/{site_id}/nodes/{node_id}/services/{service_id}/restart")
+async def restart_service(site_id: int, node_id: int, service_id: int, user_id: int = Depends(get_current_user)):
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+
+    service = fetch_one("SELECT name, restart_command FROM node_services WHERE id = %s", (service_id,))
+    if not service or not service.get("restart_command"):
+        raise HTTPException(status_code=400, detail="No restart command configured for this service")
+
+    node = fetch_one("SELECT name, agent_token FROM site_nodes WHERE id = %s", (node_id,))
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    token = node["agent_token"]
+    if token not in [c.get("token") for c in manager.active_connections.values()]:
+        raise HTTPException(status_code=400, detail="Agent offline")
+
+    command = {
+        "type": "command",
+        "action": "restart_service",
+        "request_id": f"restart_{service_id}_{datetime.now().timestamp()}",
+        "params": {
+            "services": [
+                {
+                    "name": service["name"],
+                    "restart_command": service["restart_command"]
+                }
+            ]
+        }
+    }
+    await manager.send_command(token, command)
+    
+    log_deploy(site_id, user_id, "service_restarted", node["name"], 0, "success")
+
+    return {"status": "ok", "message": f"Service {service['name']} restart command sent"}
 
 @app.get("/api/sites/{site_id}/nodes/summary")
 async def get_nodes_summary(site_id: int, user_id: int = Depends(get_current_user)):
@@ -791,6 +783,56 @@ async def rollback_site(site_id: int, user_id: int = Depends(get_current_user)):
     
     return {"status": "ok", "message": f"Rolled back {sum(1 for r in results if r['status'] == 'rolled_back')}/{len(nodes)} nodes", "results": results}
 
+@app.post("/api/sites/{site_id}/restart")
+async def restart_site(site_id: int, user_id: int = Depends(get_current_user)):
+    """Перезапуск всех сервисов на всех нодах сайта"""
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    nodes = fetch_all("SELECT id, name, agent_token FROM site_nodes WHERE site_id = %s", (site_id,))
+    
+    if not nodes:
+        return {"status": "error", "message": "No nodes configured. Add a node first."}
+    
+    results = []
+    for node in nodes:
+        services = fetch_all(
+            "SELECT * FROM node_services WHERE node_id = %s AND restart_command IS NOT NULL",
+            (node["id"],)
+        )
+        
+        if not services:
+            results.append({"node": node["name"], "status": "skipped", "reason": "No services with restart command"})
+            log_deploy(site_id, user_id, "restart_all", node["name"], 0, "skipped", "No services with restart command")
+            continue
+        
+        token = node["agent_token"]
+        if token not in [c.get("token") for c in manager.active_connections.values()]:
+            results.append({"node": node["name"], "status": "offline"})
+            log_deploy(site_id, user_id, "restart_all", node["name"], 0, "failed", "Agent offline")
+            continue
+        
+        command = {
+            "type": "command",
+            "action": "restart_service",
+            "request_id": f"restart_{node['id']}_{datetime.now().timestamp()}",
+            "params": {
+                "services": [
+                    {
+                        "name": s["name"],
+                        "restart_command": s["restart_command"]
+                    }
+                    for s in services
+                ]
+            }
+        }
+        await manager.send_command(token, command)
+        results.append({"node": node["name"], "status": "restarted", "services": len(services)})
+        log_deploy(site_id, user_id, "restart_all", node["name"], len(services), "success")
+    
+    return {"status": "ok", "message": f"Restarted services on {sum(1 for r in results if r['status'] == 'restarted')}/{len(nodes)} nodes", "results": results}
+
 @app.get("/api/sites/{site_id}/metrics")
 async def get_site_metrics(site_id: int, user_id: int = Depends(get_current_user)):
     """Получить метрики сайта из Prometheus"""
@@ -845,6 +887,35 @@ async def get_deploy_history(site_id: int, limit: int = 30, user_id: int = Depen
         (site_id, limit)
     )
     return {"status": "ok", "data": logs}
+
+@app.post("/api/sites/{site_id}/grafana-access")
+async def get_grafana_access(site_id: int, user_id: int = Depends(get_current_user)):
+    site = get_site_info(site_id)
+    if not site or site.get("user_id") != user_id:
+        raise HTTPException(status_code=403)
+
+    try:
+        grafana_resp = requests.post(
+            "http://grafana:3000/api/auth/keys",
+            json={
+                "name": f"user-{user_id}-site-{site_id}",
+                "role": "Editor",
+                "secondsToLive": 86400
+            },
+            auth=("admin", "admin"),
+            timeout=10
+        )
+        
+        if grafana_resp.status_code == 200:
+            api_key = grafana_resp.json().get("key")
+            return {
+                "status": "ok",
+                "grafana_url": f"http://localhost:3100/?auth_token={api_key}"
+            }
+    except Exception as e:
+        logger.error(f"Grafana API error: {e}")
+    
+    raise HTTPException(status_code=500, detail="Failed to create Grafana access")
 
 # ============== WEBSOCKET ДЛЯ АГЕНТОВ ==============
 

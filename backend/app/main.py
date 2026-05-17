@@ -373,7 +373,14 @@ async def create_node(site_id: int, req: NodeCreateRequest, user_id: int = Depen
     
     log_deploy(site_id, user_id, "node_added", req.name, 0, "success")
     
-    return {"status": "ok", "node_id": node_id, "agent_token": agent_token}
+    api_url = os.getenv("API_PUBLIC_URL", "http://localhost:8000")
+    
+    return {
+        "status": "ok",
+        "node_id": node_id,
+        "agent_token": agent_token,
+        "setup_command": f"curl -sSL {api_url}/api/agent/install.sh | bash -s {agent_token}"
+    }
 
 @app.delete("/api/sites/{site_id}/nodes/{node_id}")
 async def delete_node(site_id: int, node_id: int, user_id: int = Depends(get_current_user)):
@@ -962,6 +969,92 @@ async def websocket_agent_endpoint(websocket: WebSocket, token: str):
     finally:
         manager.disconnect(token)
         execute("UPDATE site_nodes SET agent_connected = FALSE WHERE agent_token = %s", (token,))
+
+# ============== ЭНДПОИНТЫ ДЛЯ УСТАНОВКИ АГЕНТА ==============
+
+@app.get("/api/agent/install.sh")
+async def get_install_script():
+    """Отдаёт скрипт установки агента"""
+    api_url = os.getenv("API_PUBLIC_URL", "http://localhost:8000")
+    
+    script = f"""#!/bin/bash
+set -e
+
+TOKEN=$1
+API_URL="{api_url}"
+
+if [ -z "$TOKEN" ]; then
+    echo "Использование: curl -sSL $API_URL/api/agent/install.sh | bash -s AGENT_TOKEN"
+    exit 1
+fi
+
+echo "🚀 DevOps Agent — Установка..."
+echo ""
+
+echo "📦 Установка пакетов..."
+apt-get update -qq
+apt-get install -y -qq python3 python3-pip curl git
+
+echo "📥 Загрузка агента..."
+mkdir -p /opt/devops-agent
+curl -sSL $API_URL/api/agent/agent.py -o /opt/devops-agent/agent.py
+
+echo "AGENT_TOKEN=$TOKEN" > /opt/devops-agent/.env
+echo "API_URL=$(echo $API_URL | sed 's|http|ws|')/ws/agent" >> /opt/devops-agent/.env
+echo "ALLOW_INSECURE_TLS=true" >> /opt/devops-agent/.env
+
+echo "📦 Установка зависимостей Python..."
+pip3 install -q websockets psutil requests python-dotenv
+
+echo "⚙️ Настройка автозапуска..."
+cat > /etc/systemd/system/devops-agent.service << EOF
+[Unit]
+Description=DevOps Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/devops-agent/agent.py
+WorkingDirectory=/opt/devops-agent
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable devops-agent
+systemctl start devops-agent
+
+sleep 2
+
+if systemctl is-active --quiet devops-agent; then
+    echo ""
+    echo "✅ Агент запущен и работает!"
+    echo "📋 Статус: systemctl status devops-agent"
+    echo "📋 Логи: journalctl -u devops-agent -f"
+else
+    echo "❌ Ошибка запуска. Проверьте: journalctl -u devops-agent"
+fi
+"""
+    
+    from fastapi.responses import Response
+    return Response(content=script, media_type="text/plain")
+
+@app.get("/api/agent/agent.py")
+async def get_agent_file():
+    """Отдаёт актуальный файл агента"""
+    agent_path = os.path.join(os.path.dirname(__file__), "..", "agent.py")
+
+    if not os.path.exists(agent_path):
+        raise HTTPException(status_code=404, detail="Agent file not found")
+    
+    with open(agent_path, "r") as f:
+        content = f.read()
+    
+    from fastapi.responses import Response
+    return Response(content=content, media_type="text/plain")
 
 # ============== ЗАПУСК ==============
 if __name__ == "__main__":

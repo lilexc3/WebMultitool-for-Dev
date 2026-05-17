@@ -560,13 +560,6 @@ async def create_site(req: SiteCreateRequest, user_id: int = Depends(get_current
         logger.error(f"Failed to create site: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to create site: {str(e)}")
     
-    # Автоматически создаём ноду по умолчанию
-    node_token = secrets.token_urlsafe(32)
-    execute(
-        "INSERT INTO site_nodes (site_id, name, agent_token) VALUES (%s, %s, %s)",
-        (site_id, req.name, node_token)
-    )
-    
     update_prometheus_targets()
     
     return {

@@ -33,9 +33,6 @@ except ImportError:
 
 AGENT_TOKEN = os.getenv('AGENT_TOKEN')
 API_URL = os.getenv('API_URL', 'ws://localhost:8000/ws/agent')
-SITE_PATH = os.getenv('SITE_PATH', '/var/www/site')
-REPO_URL = os.getenv('REPO_URL', '')
-BRANCH = os.getenv('BRANCH', 'main')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -245,6 +242,33 @@ class DevOpsAgent:
             result = self.execute_rollback(params)
         elif action == 'restart_nginx':
             result = self.execute_restart_nginx(params)
+        elif action == 'restart_service':
+            services = params.get('services', [])
+            if not services:
+                result = {"status": "error", "message": "No services specified"}
+            else:
+                results = []
+                for service in services:
+                    service_name = service.get('name', 'unknown')
+                    restart_command = service.get('restart_command')
+                    if restart_command:
+                        try:
+                            result_exec = subprocess.run(
+                                restart_command,
+                                shell=True,
+                                capture_output=True,
+                                text=True,
+                                timeout=30
+                            )
+                            if result_exec.returncode == 0:
+                                results.append({"service": service_name, "status": "success"})
+                            else:
+                                results.append({"service": service_name, "status": "error", "error": result_exec.stderr})
+                        except Exception as e:
+                            results.append({"service": service_name, "status": "error", "error": str(e)})
+                    else:
+                        results.append({"service": service_name, "status": "skipped", "reason": "No restart command"})
+                result = {"status": "success", "results": results}
         elif action == 'check_site':
             result = self.execute_check_site(params)
         elif action == 'get_stats':

@@ -268,29 +268,24 @@ async def login_user(req: UserLoginRequest):
 @app.get("/api/users/me")
 async def get_current_user_profile(user_id: int = Depends(get_current_user)):
     user = fetch_one(
-        "SELECT id, email, name, created_at FROM users WHERE id = %s",
-        (user_id,),
+        "SELECT id, email, name, created_at FROM users WHERE id = %s", (user_id,)
     )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    sites = fetch_all("SELECT id, deploys_count FROM sites WHERE user_id = %s", (user_id,))
+    sites = fetch_all("SELECT id, url FROM sites WHERE user_id = %s", (user_id,))
 
     uptime_vals = []
     for site in sites:
-        url_row = fetch_one("SELECT url FROM sites WHERE id = %s", (site["id"],))
-        if url_row:
-            q = f'avg_over_time(probe_success{{instance="{url_row["url"]}"}}[30d]) * 100'
-            try:
-                resp = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": q}, timeout=3)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data["data"]["result"]:
-                        uptime_vals.append(float(data["data"]["result"][0]["value"][1]))
-            except Exception:
-                pass
-
-    avg_uptime = round(sum(uptime_vals) / len(uptime_vals), 2) if uptime_vals else None
+        q = f'avg_over_time(probe_success{{instance="{site["url"]}"}}[30d]) * 100'
+        try:
+            resp = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": q}, timeout=3)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data["data"]["result"]:
+                    uptime_vals.append(float(data["data"]["result"][0]["value"][1]))
+        except Exception:
+            pass
 
     return {
         "status": "ok",
@@ -300,7 +295,7 @@ async def get_current_user_profile(user_id: int = Depends(get_current_user)):
             "name": user.get("name"),
             "created_at": user["created_at"].isoformat() if user["created_at"] else None,
             "total_sites": len(sites),
-            "avg_uptime_30d": avg_uptime,
+            "avg_uptime_30d": round(sum(uptime_vals) / len(uptime_vals), 2) if uptime_vals else None,
         }
     }
 

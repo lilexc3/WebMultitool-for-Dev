@@ -61,8 +61,10 @@ export const register = (email, password, name) =>
     body: JSON.stringify({ email, password, name }),
     skipAuthRedirect: true,
   }).then((data) => {
-    if (data.access_token) localStorage.setItem("access_token", data.access_token);
-    if (data.user_id != null) localStorage.setItem("user_id", String(data.user_id));
+    if (data.access_token)
+      localStorage.setItem("access_token", data.access_token);
+    if (data.user_id != null)
+      localStorage.setItem("user_id", String(data.user_id));
     return data;
   });
 
@@ -72,8 +74,10 @@ export const login = (email, password) =>
     body: JSON.stringify({ email, password }),
     skipAuthRedirect: true,
   }).then((data) => {
-    if (data.access_token) localStorage.setItem("access_token", data.access_token);
-    if (data.user_id != null) localStorage.setItem("user_id", String(data.user_id));
+    if (data.access_token)
+      localStorage.setItem("access_token", data.access_token);
+    if (data.user_id != null)
+      localStorage.setItem("user_id", String(data.user_id));
     return data;
   });
 
@@ -134,3 +138,50 @@ export const healthCheck = () =>
   });
 
 export { API_BASE };
+
+// Nodes
+export const getNodes = (siteId) =>
+  request(`/api/sites/${siteId}/nodes`).then((d) => d.data);
+export const createNode = (siteId, data) =>
+  request(`/api/sites/${siteId}/nodes`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteNode = (siteId, nodeId) =>
+  request(`/api/sites/${siteId}/nodes/${nodeId}`, { method: "DELETE" });
+
+// Services
+export const getServices = (siteId, nodeId) =>
+  request(`/api/sites/${siteId}/nodes/${nodeId}/services`).then((d) => d.data);
+export const createService = (siteId, nodeId, data) =>
+  request(`/api/sites/${siteId}/nodes/${nodeId}/services`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateService = (siteId, nodeId, serviceId, data) =>
+  request(`/api/sites/${siteId}/nodes/${nodeId}/services/${serviceId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const deleteService = (siteId, nodeId, serviceId) =>
+  request(`/api/sites/${siteId}/nodes/${nodeId}/services/${serviceId}`, {
+    method: "DELETE",
+  });
+
+// Activity
+export const getActivity = (siteId, limit = 30) =>
+  request(`/api/sites/${siteId}/activity?limit=${limit}`).then((d) => d.data);
+
+// User profile
+export const getMe = () => request("/api/users/me").then((d) => d.data);
+export const updateMe = (updates) =>
+  request("/api/users/me", { method: "PUT", body: JSON.stringify(updates) });
+export const changePassword = (current_password, new_password) =>
+  request("/api/users/me/password", {
+    method: "PUT",
+    body: JSON.stringify({ current_password, new_password }),
+  });
+export const deleteAccount = () =>
+  request("/api/users/me", { method: "DELETE" });
+export const restartSite = (id) =>
+  request(`/api/sites/${id}/restart`, { method: "POST" });
